@@ -86,7 +86,8 @@ Named options may appear before, between, or after positionals.
 | Argument | Effect |
 | --- | --- |
 | `--verbose` or `-v` | Set a boolean flag to true. |
-| `--count 3`, `--count=3`, or `-c 3` | Set an integer option. Signed decimal values, including negatives, are accepted. |
+| `--count 3`, `--count=3`, `-c 3`, or `-c3` | Set an integer option. Signed decimal values, including negatives, are accepted. |
+| `-vc3` | Combine `-v` and `-c 3` in a short-option bundle. |
 | `--name Seth` or `--name=Seth` | Set a string option, if your schema declares `name`. |
 | `-- -filename` | Stop parsing options and treat the remaining tokens as positionals. |
 | `--help` or `-h` | Request help without requiring missing arguments. |
@@ -96,9 +97,13 @@ Repeated options keep the last value. Strings may be empty or start with
 Use `--` before a negative positional number or a filename starting with `-`.
 A lone `-` is always positional.
 
-Short-option bundles (`-cv`), attached short values (`-c3`), boolean values
-such as `--verbose=false`, lists, subcommands, and custom field types are
-not supported.
+Short-option bundles run left to right. A value-taking option consumes the
+remaining characters, or the next argument if none remain: `-vc-3` means
+`-v -c -3`. Attached string values work too: `-nAda` supplies `Ada` when `n`
+is a string option. An attached `=` is literal: `-n=foo` supplies `=foo`.
+
+Boolean values such as `--verbose=false`, lists, subcommands, and custom
+field types are not supported.
 
 ## Use the result safely
 
