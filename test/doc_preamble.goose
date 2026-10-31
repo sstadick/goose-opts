@@ -8,4 +8,5 @@ struct Options {
     count: goosopt::Field<i64> = goosopt::Field<i64> {
         value: 1, short: "c", help: "Number of copies",
     },
+    verbose: goosopt::Field<bool> = goosopt::Field<bool> { short: "v" },
 }

@@ -60,6 +60,10 @@ def main():
                 "input.txt Ada Lovelace -3 true\n", "")
             run([*command, "input.txt", "-n", "Ada", "-c", "-7", "-v"],
                 "input.txt Ada -7 true\n", "")
+            run([*command, "-vc-3", "input.txt", "-nAda"], "input.txt Ada -3 true\n", "")
+            run([*command, "-vn--help", "-c3", "--", "-vc9"], "-vc9 --help 3 true\n", "")
+            run([*command, "-vc"], stdout="", stderr="-c: missing value\n", code=2)
+            run([*command, "-vzh"], stdout="", stderr="unknown option: -z\n", code=2)
             run([*command, "--name", "--help", "--", "-file"], "-file --help 1 false\n", "")
             run([*command, "--count"], stdout="", stderr="--count: missing value\n", code=2)
             run([*command, "-n"], stdout="", stderr="-n: missing value\n", code=2)
@@ -76,6 +80,7 @@ def main():
                 assert text in help_text, help_text
             assert all(text not in help_text for text in ("--input", "--verbose=", "--display_name")), help_text
             run([*command, "-h"], stdout=help_text, stderr="")
+            run([*command, "-vhz"], stdout=help_text, stderr="")
         print("PASS example CLI (TinyCC and native)", flush=True)
         if zsh:
             run([zsh, root / "test" / "completion.zsh", binary, zsh],

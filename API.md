@@ -49,7 +49,7 @@ assert(input.value == "" && input.required && input.positional);
 
 ## `goosopt::parse`
 
-[source](goosopt.goose#L122-L172)
+[source](goosopt.goose#L126-L199)
 
 ```goose
 fn parse<T, S>(argv: S[:], var options: T = default<T>()) -> T, bool, u8[>..]
@@ -65,9 +65,12 @@ false help flag. Discard the options on error or help; they may be partial.
 The caller's defaults and all field metadata are unchanged. String values
 borrow argument bytes: bind argv to a variable and keep its storage alive.
 
-Long values accept `--name VALUE` or `--name=VALUE`; short values require
-`-n VALUE`. Boolean flags set true and consume no value. Repeats use the
-last value. Bundles and attached short values are not supported.
+Long values accept `--name VALUE` or `--name=VALUE`; short values accept
+`-n VALUE` or `-nVALUE`. Short options run left to right within a bundle:
+flags set true, and a value-taking option consumes the rest of the token,
+or the next argument if no characters remain. Thus `-vc3` means `-v -c 3`.
+An attached '=' is literal: `-n=foo` supplies '=foo'. Repeats use the last
+value. Unknown short options report the offending character.
 `--` ends option processing; a lone `-` is positional. A value token can
 itself be `--help`: help is recognized only where an option is expected.
 `-h`/`--help` bypass missing required fields, but not schema errors or an
@@ -75,13 +78,14 @@ earlier parse error. The library never prints or exits.
 
 This example uses the `Options` struct in the
 [example preamble](test/doc_preamble.goose): a required input positional
-and a count option with default 1 and short name `c`.
+and a count option with default 1 and short name `c`, plus a verbose flag.
 
 ```goose
-let argv = ["input.txt", "-c", "3"];
+let argv = ["input.txt", "-vc3"];
 let options, help_requested, error = goosopt::parse<Options>(argv);
 assert(error == "" && !help_requested);
 assert(options.input.value == "input.txt" && options.count.value == 3);
+assert(options.verbose.value);
 let missing_args: (const u8[:])[0] = [];
 let missing, missing_help, missing_error = goosopt::parse<Options>(missing_args);
 assert(!missing_help && missing_error == "missing required argument: input");
@@ -91,7 +95,7 @@ assert(!missing_help && missing_error == "missing required argument: input");
 
 ## `goosopt::help`
 
-[source](goosopt.goose#L227-L276)
+[source](goosopt.goose#L254-L303)
 
 ```goose
 fn help<T>(program: const u8[:], defaults: T = default<T>(), description: const u8[:] = "") -> u8[>..]

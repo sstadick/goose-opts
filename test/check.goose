@@ -6,7 +6,7 @@ struct Options {
     count:   goosopt::Field<i64>         = goosopt::Field<i64> { value: 7 },
     verbose: goosopt::Field<bool>        = goosopt::Field<bool> {},
 }
-struct Other { dry_run: goosopt::Field<bool>, limit: goosopt::Field<i64> }
+struct Other { dry_run: goosopt::Field<bool>, limit: goosopt::Field<i64>, quiet: goosopt::Field<bool> }
 struct Empty {}
 struct Reserved { help: goosopt::Field<bool> = goosopt::Field<bool> {} }
 
@@ -56,6 +56,16 @@ fn main() {
     let no_args: (const u8[:])[0] = [];
     let zero, zero_help, zero_error = goosopt::parse<Other>(no_args);
     assert(zero_error == "" && !zero_help && !zero.dry_run.value && zero.limit.value == 0);
+    var flags = default<Other>();
+    flags.dry_run.short = "d";
+    flags.quiet.short = "q";
+    flags.limit.short = "l";
+    for bundle in ["-dq", "-qdl-6"] {
+        let args = [bundle];
+        let parsed, help_requested, error = goosopt::parse(args, flags);
+        assert(error == "" && !help_requested && parsed.dry_run.value && parsed.quiet.value);
+        assert(parsed.limit.value == (if bundle == "-dq" { 0 } else { -6 }));
+    }
     let empty, empty_help, empty_error = goosopt::parse<Empty>(no_args);
     assert(empty_error == "" && !empty_help);
     check_error(["--name", "x"], Empty {}, "unknown option: --name");
@@ -132,14 +142,36 @@ fn check_names() {
     check(["-o", "first", "--output-file", "last"], "last", 7, false, defaults);
     check(["--output-file=first", "-o", ""], "", 7, false, defaults);
     check(["-o", "--help"], "--help", 7, false, defaults);
+    check(["-ovalue", "-c3"], "value", 3, false, defaults);
+    check(["-vvc-9", "-olast"], "last", -9, true, defaults);
+    check(["-vc", "12", "-ovalue"], "value", 12, true, defaults);
+    check(["-ovc3"], "vc3", 7, false, defaults);
+    check(["-o=value"], "=value", 7, false, defaults);
+    check(["-vo--help"], "--help", 7, true, defaults);
+    check(["-vo", "--"], "--", 7, true, defaults);
+    check(["-c3", "-c-4", "--count=5", "-ovalue"], "value", 5, false, defaults);
     check_error([], defaults, "missing required option: --output-file");
+    check_error(["-vv"], defaults, "missing required option: --output-file");
+    check_error(["-vc"], defaults, "-c: missing value");
+    check_error(["-vc3v"], defaults, "-c: expected i64, got '3v'");
+    check_error(["-c=3"], defaults, "-c: expected i64, got '=3'");
+    check_error(["-c9223372036854775808"], defaults, "-c: expected i64, got '9223372036854775808'");
+    check_error(["-vzh"], defaults, "unknown option: -z");
+    check_error(["-ch"], defaults, "-c: expected i64, got 'h'");
+    check_error(["-v=true"], defaults, "unknown option: -=");
+    for flag in ["-vh", "-hv", "-vhz"] {
+        let argv = [flag];
+        let options, help_requested, error = goosopt::parse(argv, defaults);
+        assert(error == "" && help_requested);
+    }
     check_error(["-o"], defaults, "-o: missing value");
     check_error(["-c", "bad"], defaults, "-c: expected i64, got 'bad'");
     check_error(["--count=bad"], defaults, "--count: expected i64, got 'bad'");
-    for bad in ["--name", "-ovalue", "-o=value", "-vc", "-v=true", "-O"] {
+    for bad in ["--name", "-O"] {
         check_error([bad], defaults, str("unknown option: ", bad));
     }
     check_error(["--", "-o"], defaults, "unexpected argument: -o");
+    check_error(["--", "-vc3"], defaults, "unexpected argument: -vc3");
     let text = goosopt::help("named", defaults);
     assert(starts_with(text, "Usage: named [OPTIONS] --output-file=OUTPUT-FILE\n"));
     assert(find(text, "-o, --output-file=OUTPUT-FILE  Output path [required]") >= 0 && find(text, "--name") == -1);

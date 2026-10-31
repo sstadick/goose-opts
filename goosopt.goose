@@ -98,9 +98,12 @@ fn validate<T>(options: T) -> u8[>..] {
 // The caller's defaults and all field metadata are unchanged. String values
 // borrow argument bytes: bind argv to a variable and keep its storage alive.
 //
-// Long values accept `--name VALUE` or `--name=VALUE`; short values require
-// `-n VALUE`. Boolean flags set true and consume no value. Repeats use the
-// last value. Bundles and attached short values are not supported.
+// Long values accept `--name VALUE` or `--name=VALUE`; short values accept
+// `-n VALUE` or `-nVALUE`. Short options run left to right within a bundle:
+// flags set true, and a value-taking option consumes the rest of the token,
+// or the next argument if no characters remain. Thus `-vc3` means `-v -c 3`.
+// An attached '=' is literal: `-n=foo` supplies '=foo'. Repeats use the last
+// value. Unknown short options report the offending character.
 // `--` ends option processing; a lone `-` is positional. A value token can
 // itself be `--help`: help is recognized only where an option is expected.
 // `-h`/`--help` bypass missing required fields, but not schema errors or an
@@ -108,13 +111,14 @@ fn validate<T>(options: T) -> u8[>..] {
 //
 // This example uses the `Options` struct in the
 // [example preamble](test/doc_preamble.goose): a required input positional
-// and a count option with default 1 and short name `c`.
+// and a count option with default 1 and short name `c`, plus a verbose flag.
 //
 // ```goose
-// let argv = ["input.txt", "-c", "3"];
+// let argv = ["input.txt", "-vc3"];
 // let options, help_requested, error = goosopt::parse<Options>(argv);
 // assert(error == "" && !help_requested);
 // assert(options.input.value == "input.txt" && options.count.value == 3);
+// assert(options.verbose.value);
 // let missing_args: (const u8[:])[0] = [];
 // let missing, missing_help, missing_error = goosopt::parse<Options>(missing_args);
 // assert(!missing_help && missing_error == "missing required argument: input");
@@ -132,18 +136,41 @@ fn parse<T, S>(argv: S[:], var options: T = default<T>()) -> T, bool, u8[>..] {
         if !end_options && (arg == "--help" || arg == "-h") { return options, true, ""; }
         let named = !end_options && starts_with(arg, "-") && arg != "-";
         if named { i += 1; }
+        if named && !starts_with(arg, "--") {
+            var cursor = 1;
+            while cursor < arg.len {
+                let short_name = arg[cursor..cursor + 1];
+                if short_name == "h" { return options, true, ""; }
+                cursor += 1;
+                var found = false;
+                const for <Name, Access> in fields<T> {
+                    let field = options.Access;
+                    if !field.positional && field.short == short_name {
+                        found = true;
+                        let error = if !is_flag(field.value) && cursor < arg.len {
+                            let value = arg[cursor..];
+                            cursor = arg.len;
+                            read_value(&options.Access.value, value)
+                        } else { read_option(&options.Access.value, argv, &i) };
+                        if error.len > 0 { return options, false, str("-", short_name, ": ", error); }
+                        seen.push(Name);
+                    }
+                }
+                if !found { return options, false, str("unknown option: -", short_name); }
+            }
+            continue;
+        }
         var found = false;
         var position = 0;
         const for <Name, Access> in fields<T> {
             let field = options.Access;
             let long_name = str("--", option_name(Name, field));
             let attached = named && starts_with(arg, str(long_name, "="));
-            let short_match = field.short.len > 0 && arg == str("-", field.short);
             let matches = if field.positional {
                 let selected = !named && position == positional;
                 position += 1;
                 selected
-            } else { named && (arg == long_name || attached || short_match) };
+            } else { named && (arg == long_name || attached) };
             if matches {
                 found = true;
                 let error = if attached {

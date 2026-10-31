@@ -104,8 +104,10 @@ return schema errors before parsing any arguments.
 - Strings borrow the argument bytes. Keep that storage alive while using
   the result, and bind argument arrays to a variable rather than passing a
   temporary array literal.
-- Short options take separate values: `-c -3`. Bundles (`-cv`) and attached
-  short values (`-c3`, `-c=3`) are not supported.
+- Short options accept separate or attached values: `-c -3` or `-c-3`.
+  Bundles run left to right: `-vc3` means `-v -c 3`. A value-taking option
+  consumes the remaining characters, or the next argument if none remain.
+  An attached `=` is literal: `-n=foo` supplies `=foo`, not `foo`.
 - Repeated options use the last value. Flags do not accept `=value`.
 - `parse` returns `options, help_requested, error`. An empty error with
   `help_requested == false` means success. Read values through `.value`.
@@ -141,8 +143,7 @@ Value-taking options use `--name=NAME` in help so zsh completes them with
 compatibility, not a claim of full GNU CLI compliance. `_gnu_generic` does
 not derive our positional schema from help.
 
-Still intentionally absent: short-option bundles, lists, subcommands, and
-custom field types.
+Still intentionally absent: lists, subcommands, and custom field types.
 
 ## Development
 
