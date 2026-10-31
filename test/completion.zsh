@@ -11,7 +11,8 @@ trap 'zpty -d cli 2>/dev/null; rm -f "$record"' EXIT
 zpty -b cli "$shell" -f
 # Carry the parent's search paths into the child (also works with an unpacked zsh).
 zpty -w cli "module_path=(${(j: :)${(@q)module_path}}); fpath=(${(j: :)${(@q)fpath}})"
-zpty -w cli "autoload -Uz compinit; compinit -D; compdef _gnu_generic ${(q)binary}"
+# Ignore unsafe site-completion directories instead of prompting in CI.
+zpty -w cli "autoload -Uz compinit; compinit -i -D; compdef _gnu_generic ${(q)binary}"
 zpty -w cli "record=${(q)record}"
 zpty -w cli '_record() { print -r -- "$BUFFER" >> "$record"; BUFFER=; zle redisplay; }'
 zpty -w cli "zle -N _record; bindkey '^X' _record"
