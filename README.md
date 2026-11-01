@@ -61,7 +61,8 @@ TinyCC, GCC, and Clang.
 ## Describe your options
 
 Each member is a `Field<T>`, where `T` is `bool`, `i64`, or `const u8[:]`.
-Read the parsed result through `.value`.
+Read the parsed result through `.value`; `.provided` tells you whether the
+user explicitly supplied that field.
 
 | Field setting | Meaning |
 | --- | --- |
@@ -110,6 +111,20 @@ field types are not supported.
 `parse` returns `options, help_requested, error`. Check the error first,
 then help, and only use the options on success. Parsing stops at a help
 request, so an earlier invalid argument still produces an error.
+
+Use `.provided` when CLI arguments should override a config file only if
+explicitly supplied. With the quickstart's count default of 1:
+
+| Count argument | `options.count.value` | `options.count.provided` |
+| --- | --- | --- |
+| omitted | `1` | `false` |
+| `--count 1` | `1` | `true` |
+| `-c3` | `3` | `true` |
+
+Presence works for flags, values, and positionals, including an explicit
+zero or empty string. It resets on every parse, even if you pass an earlier
+result as defaults. The values are retained as defaults, but old presence
+flags never satisfy required-field checks. The caller's defaults are unchanged.
 
 Strings **borrow the argument storage**. Keep it alive while using the
 result. Bind argument arrays to a variable rather than passing a temporary

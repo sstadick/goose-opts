@@ -24,7 +24,33 @@ fn check_error<T>(argv: (const u8[:])[:], defaults: T, expected: const u8[:]) {
     assert(error == expected && !help_requested);
 }
 
+fn check_presence(argv: (const u8[:])[:], name: bool, count: bool, verbose: bool) {
+    var defaults = Options {};
+    assert(!defaults.name.provided && !defaults.count.provided && !defaults.verbose.provided);
+    defaults.name.value = "";
+    defaults.count.value = 0;
+    defaults.verbose.value = true;
+    defaults.name.short = "n";
+    defaults.count.short = "c";
+    defaults.verbose.short = "v";
+    // Stale presence must not leak into this parse or mutate the caller.
+    defaults.name.provided = true;
+    defaults.count.provided = true;
+    defaults.verbose.provided = true;
+    let options, help_requested, error = goosopt::parse(argv, defaults);
+    assert(error == "" && !help_requested);
+    assert(options.name.value == "" && options.count.value == 0 && options.verbose.value);
+    assert(options.name.provided == name && options.count.provided == count && options.verbose.provided == verbose);
+    assert(defaults.name.provided && defaults.count.provided && defaults.verbose.provided);
+}
+
 fn main() {
+    check_presence([], false, false, false);
+    check_presence(["--count", "0"], false, true, false);
+    check_presence(["--name="], true, false, false);
+    check_presence(["--verbose"], false, false, true);
+    check_presence(["-vvc0", "-n", ""], true, true, true);
+    check_presence(["--count=1", "--count=0"], false, true, false);
     check([], "default", 7, false);
     check(["--count", "-23", "--verbose", "--name", "Ada Lovelace"], "Ada Lovelace", -23, true);
     check(["--name", "first", "--name", "", "--count", "2", "--count", "9", "--verbose", "--verbose"], "", 9, true);
@@ -124,9 +150,22 @@ fn check_metadata() {
     check_error(["--help"], defaults, "required positional follows optional positional: count");
     defaults = Options {};
     defaults.count.required = true;
+    defaults.count.provided = true;
     check_error([], defaults, "missing required option: --count");
     check(["--count", "0"], "default", 0, false, defaults);
     check_error([], Reserved {}, "reserved option name: --help");
+
+    // Positionals count as supplied even when empty or equal to a default.
+    let argv = ["", "--name=", "7"];
+    let parsed, help_requested, error = goosopt::parse<Command>(argv);
+    assert(error == "" && !help_requested);
+    assert(parsed.input.provided && parsed.name.provided && parsed.count.provided && !parsed.verbose.provided);
+    let next_argv = ["source", "--name", "Ada"];
+    let next, next_help, next_error = goosopt::parse(next_argv, parsed);
+    assert(next_error == "" && !next_help && next.input.provided && next.name.provided);
+    assert(next.count.value == 7 && !next.count.provided && !next.verbose.provided);
+    assert(parsed.count.provided);
+    check_error([], parsed, "missing required argument: input");
 }
 
 fn check_names() {

@@ -4,7 +4,10 @@ import std;
 
 // A CLI field's value and metadata, stored directly in the caller's options
 // struct. T must be `bool`, `i64`, or `const u8[:]`. Read parsed data through
-// `.value`; all other members remain unchanged by parsing.
+// `.value` and check `.provided` to distinguish explicit input from defaults.
+// `provided` starts false and is reset on each parse, then set true when the
+// field is successfully read, even if its value equals the default. All
+// other members remain unchanged by parsing.
 //
 // `value` defaults to the type's zero/empty value. `required` is explicit:
 // when true, the user must supply the field even if `value` is initialized.
@@ -20,6 +23,7 @@ import std;
 // ```goose
 // let count = goosopt::Field<i64> { value: 3, short: "c", help: "Number of copies" };
 // assert(count.value == 3 && count.short == "c" && !count.required);
+// assert(!count.provided);
 // let input = goosopt::Field<const u8[:]> { required: true, positional: true };
 // assert(input.value == "" && input.required && input.positional);
 // ```
@@ -30,6 +34,7 @@ struct Field<T> {
     positional: bool        = false,
     long:       const u8[:] = "",
     short:      const u8[:] = "",
+    provided:   bool        = false,
 }
 
 fn option_name<T>(name: const u8[:], field: Field<T>) -> const u8[:] {
@@ -95,8 +100,10 @@ fn validate<T>(options: T) -> u8[>..] {
 //
 // Returns `options, help_requested, error`. Success means an empty error and
 // false help flag. Discard the options on error or help; they may be partial.
-// The caller's defaults and all field metadata are unchanged. String values
-// borrow argument bytes: bind argv to a variable and keep its storage alive.
+// Each returned field's `provided` reports whether this parse read it from
+// argv. Previous presence flags are ignored, including for required checks.
+// The caller's defaults and field configuration are unchanged. String
+// values borrow argument bytes: bind argv and keep its storage alive.
 //
 // Long values accept `--name VALUE` or `--name=VALUE`; short values accept
 // `-n VALUE` or `-nVALUE`. Short options run left to right within a bundle:
@@ -119,14 +126,19 @@ fn validate<T>(options: T) -> u8[>..] {
 // assert(error == "" && !help_requested);
 // assert(options.input.value == "input.txt" && options.count.value == 3);
 // assert(options.verbose.value);
+// assert(options.input.provided && options.count.provided && options.verbose.provided);
+// let next_argv = ["another.txt"];
+// let next, next_help, next_error = goosopt::parse(next_argv, options);
+// assert(next_error == "" && !next_help && next.input.provided);
+// assert(next.count.value == 3 && !next.count.provided && !next.verbose.provided);
 // let missing_args: (const u8[:])[0] = [];
 // let missing, missing_help, missing_error = goosopt::parse<Options>(missing_args);
 // assert(!missing_help && missing_error == "missing required argument: input");
 // ```
 fn parse<T, S>(argv: S[:], var options: T = default<T>()) -> T, bool, u8[>..] {
+    const for <Name, Access> in fields<T> { options.Access.provided = false; }
     let schema_error = validate(options);
     if schema_error.len > 0 { return options, false, copy(schema_error); }
-    var seen: (const u8[:])[>..] = [];
     var i = 0;
     var positional = 0;
     var end_options = false;
@@ -153,7 +165,7 @@ fn parse<T, S>(argv: S[:], var options: T = default<T>()) -> T, bool, u8[>..] {
                             read_value(&options.Access.value, value)
                         } else { read_option(&options.Access.value, argv, &i) };
                         if error.len > 0 { return options, false, str("-", short_name, ": ", error); }
-                        seen.push(Name);
+                        options.Access.provided = true;
                     }
                 }
                 if !found { return options, false, str("unknown option: -", short_name); }
@@ -180,7 +192,7 @@ fn parse<T, S>(argv: S[:], var options: T = default<T>()) -> T, bool, u8[>..] {
                     let label = if field.positional { Name } else if attached { long_name } else { arg };
                     return options, false, str(label, ": ", error);
                 }
-                seen.push(Name);
+                options.Access.provided = true;
             }
         }
         if !found {
@@ -190,7 +202,7 @@ fn parse<T, S>(argv: S[:], var options: T = default<T>()) -> T, bool, u8[>..] {
     }
     const for <Name, Access> in fields<T> {
         let field = options.Access;
-        if field.required && !contains(seen[..], Name) {
+        if field.required && !field.provided {
             let label = if field.positional { Name } else { option_name(Name, field) };
             return options, false, str(if field.positional { "missing required argument: " } else { "missing required option: --" }, label);
         }
