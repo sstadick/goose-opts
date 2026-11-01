@@ -6,8 +6,7 @@ from the descriptions you put on each field.
 
 **[API reference and examples](API.md)** · [Complete example](examples/basic.goose)
 
-Experimental: the API is not stable. Inspired by
-[mojopt](https://github.com/sstadick/mojopt) and Rust's structopt.
+Experimental: the API is not stable.
 
 ## Get started
 
@@ -38,7 +37,7 @@ fn main() {
         exit(2);
     }
     if help_requested {
-        print(goosopt::help<Options>("demo"));
+        write_stdout(goosopt::help<Options>("demo"));
         return;
     }
     print(options.input.value, " ", options.count.value, " ", options.verbose.value);
@@ -53,17 +52,19 @@ goose run main.goose -- --help
 goose build main.goose -O2 -o demo
 ```
 
-The library returns results; your program decides how to print errors or
-help and which exit status to use. The example follows `main`; use a commit
-in the import for a reproducible dependency. Tested on Linux x86-64 with
-TinyCC, GCC, and Clang.
+The library returns results; your program controls output and exit status.
+Help text includes its final newline, so use `write_stdout` rather than `print`.
+The [complete example](examples/basic.goose) also demonstrates required named
+options and enum choices; it prints settings without reading any files.
+
+The import above follows `main`. Pin a commit for a reproducible dependency.
+Tested on Linux x86-64 with TinyCC, GCC, and Clang.
 
 ## Describe your options
 
 Each member is a `Field<T>`, where `T` is `bool`, `i64`, `const u8[:]`, or
-an enum whose variants have no payloads.
-Read the parsed result through `.value`; `.provided` tells you whether the
-user explicitly supplied that field.
+an enum whose variants have no payloads. Read parsed data through `.value`;
+`.provided` tells you whether the user explicitly supplied that field.
 
 | Field setting | Meaning |
 | --- | --- |
@@ -74,10 +75,10 @@ user explicitly supplied that field.
 | `required: true` | The user must supply this argument, even if it has a default. |
 | `positional: true` | Take a positional argument rather than a named option. |
 
-Without a `long` override, `dry_run` becomes `--dry_run`, not `--dry-run`.
+Without a `long` override, the field `dry_run` uses `--dry_run`.
 Short names are one ASCII letter; `--help` and `-h` are reserved. Long names
 can contain ASCII letters, digits, underscores, and hyphens, but cannot
-start with a hyphen. Names must be unique.
+start with a hyphen. Names must be unique within each long/short namespace.
 
 Positionals are assigned in struct declaration order. Required positionals
 must come before optional ones. They cannot be booleans or have option names.
@@ -85,7 +86,7 @@ Named options may appear before, between, or after positionals.
 
 ## Use enums for choices
 
-The enum defines the accepted values; there is no separate choices list:
+The enum's variant names are the accepted CLI values:
 
 ```goose
 enum Format { json, plain_text, CSV }
@@ -98,9 +99,8 @@ struct FormatOptions {
 
 `--format=json`, `--format CSV`, and `-fplain_text` return a typed `Format`
 in `.value`. Names are case-sensitive: `csv`, `plain-text`, `Format.json`,
-and numeric values are rejected. Enums also work as positionals. Defaults,
-required checks, and `.provided` work as for other fields; without an explicit
-`value`, the default is the enum's first variant.
+and numeric values are rejected. Enums also work as positionals. Without an
+explicit `value`, the default is the enum's first variant.
 
 Help shows `[choices: json, plain_text, CSV] [default: plain_text]`, and
 invalid-value errors list the same choices. Variants with payloads are not
@@ -129,7 +129,7 @@ remaining characters, or the next argument if none remain: `-vc-3` means
 is a string option. An attached `=` is literal: `-n=foo` supplies `=foo`.
 
 Explicit boolean values require a long option and `=true` or `=false`, in
-lowercase. Other values are errors. Bare flags still consume no value:
+lowercase. Other values are errors. Bare flags consume no value:
 `--verbose false` sets verbose to true and leaves `false` as a positional
 argument. Short flags do not accept explicit values (`-v=false`). Both
 explicit true and false set `.provided` and satisfy a required boolean option.
@@ -151,10 +151,10 @@ explicitly supplied. With the quickstart's count default of 1:
 | `--count 1` | `1` | `true` |
 | `-c3` | `3` | `true` |
 
-Presence works for flags, values, and positionals, including an explicit
-zero or empty string. It resets on every parse, even if you pass an earlier
-result as defaults. The values are retained as defaults, but old presence
-flags never satisfy required-field checks. The caller's defaults are unchanged.
+Presence tracks flags, values, and positionals, including false, zero, or an
+empty string. Each parse resets presence, even when reusing a parsed result
+as defaults. Required fields must be supplied on every parse. The caller's
+defaults are unchanged.
 
 Strings **borrow the argument storage**. Keep it alive while using the
 result. Bind argument arrays to a variable rather than passing a temporary
@@ -175,8 +175,9 @@ completion initialized:
 compdef _gnu_generic ./demo
 ```
 
-This completes option names, not your positional-argument schema. Value-taking
-options complete with `=`; both `--count=3` and `--count 3` are accepted.
+This completes option names, not positional arguments or enum choices.
+Value-taking options complete with `=`; both `--count=3` and `--count 3`
+are accepted.
 
 ## Contributing
 

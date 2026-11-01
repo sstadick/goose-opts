@@ -10,7 +10,7 @@
 
 ## `goosopt::Field`
 
-[source](goosopt.goose#L47-L55)
+[source](goosopt.goose#L46-L54)
 
 ```goose
 struct Field<T> {
@@ -24,28 +24,31 @@ struct Field<T> {
 }
 ```
 
-A CLI field's value and metadata, stored directly in the caller's options
-struct. T must be `bool`, `i64`, `const u8[:]`, or an enum with no variant
-payloads. Read parsed data through `.value` and check `.provided` to
-distinguish explicit input from defaults.
-`provided` starts false and is reset on each parse, then set true when the
-field is successfully read, even if its value equals the default. All
-other members remain unchanged by parsing.
+Declare an option or positional argument as a member of your options struct.
+T can be `bool`, `i64`, `const u8[:]`, or an enum with no variant payloads.
 
-`value` defaults to the type's zero/empty value. `required` is explicit:
-when true, the user must supply the field even if `value` is initialized.
-Positionals consume one token in struct declaration order and cannot have
-long or short names. Required positionals must precede optional ones.
+| Member | Meaning |
+| --- | --- |
+| `value` | Default before parsing; parsed value afterward. Defaults to false, zero, an empty string, or the first enum variant. |
+| `help` | Description shown in generated help. |
+| `required` | Require explicit input, even when a default exists. |
+| `positional` | Consume a positional argument instead of a named option. |
+| `long` | Override the option name; empty uses the struct member's name. |
+| `short` | Optional one-letter alias. |
+| `provided` | Whether this parse read the field from argv, including a value equal to its default. |
 
-Enum choices come from the variant names, matched exactly and case-sensitively.
-No type prefix, aliases, or numeric values are accepted. Enum defaults use
-Goose's first variant unless `value` is set. Help and errors list the choices.
+Parsing changes only `value` and `provided` in the returned struct. Presence
+starts false on each parse; setting it in defaults does not satisfy `required`.
+The caller's defaults are unchanged.
 
-An empty `long` uses the struct field name; otherwise it replaces that name
-on the CLI. Names contain ASCII letters, digits, underscores and hyphens,
-and cannot start with a hyphen. `short` is empty or one ASCII letter.
-`--help` and `-h` are reserved, and all option names must be unique within
-their respective long/short namespaces. `help` supplies descriptive text.
+Long names contain ASCII letters, digits, underscores, and hyphens, and cannot
+start with a hyphen. Short names are ASCII letters. Names must be unique within
+each long/short namespace; `--help` and `-h` are reserved.
+
+Positionals consume one token in declaration order. Required positionals must
+precede optional ones. They cannot be booleans or have long or short names.
+Enum values use exact, case-sensitive variant names without a type prefix.
+Help and invalid-value errors list the accepted names.
 
 ```goose
 let count = goosopt::Field<i64> { value: 3, short: "c", help: "Number of copies" };
@@ -55,57 +58,52 @@ let input = goosopt::Field<const u8[:]> { required: true, positional: true };
 assert(input.value == "" && input.required && input.positional);
 ```
 
-Using `FormatOptions` and `enum Format { json, plain_text, CSV }` from the
+Using `enum Format { json, plain_text, CSV }` from the
 [example preamble](test/doc_preamble.goose):
 
 ```goose
-let argv = ["--format=CSV"];
-let options, requested, error = goosopt::parse<FormatOptions>(argv);
-assert(error == "" && !requested);
-assert(options.format.value == Format.CSV && options.format.provided);
-let text = goosopt::help<FormatOptions>("convert");
-assert(find(text, "[choices: json, plain_text, CSV] [default: plain_text]") >= 0);
+let output = goosopt::Field<Format> { value: Format.plain_text, short: "f" };
+assert(output.value == Format.plain_text && !output.provided);
 ```
 
 <a id="api-2"></a>
 
 ## `goosopt::parse`
 
-[source](goosopt.goose#L159-L232)
+[source](goosopt.goose#L172-L245)
 
 ```goose
 fn parse<T, S>(argv: S[:], var options: T = default<T>()) -> T, bool, u8[>..]
 ```
 
-Parse arguments into a struct whose members are `Field<T>` wrappers.
-Call `parse<Options>(argv)` to use defaults declared on the options struct,
-or `parse(argv, defaults)` to supply a configured starting value.
-`argv` is an array/slice of strings and excludes the program name.
+Parse argv into an options struct whose members are `Field<T>` wrappers.
+Use `parse<Options>(argv)` for declared defaults or `parse(argv, defaults)`
+to supply your own. For process arguments, bind `let argv = args();` and
+pass `argv[1..]` to exclude the program name. See the
+[complete example](examples/basic.goose).
 
-Returns `options, help_requested, error`. Success means an empty error and
-false help flag. Discard the options on error or help; they may be partial.
-Each returned field's `provided` reports whether this parse read it from
-argv. Previous presence flags are ignored, including for required checks.
-The caller's defaults and field configuration are unchanged. String
-values borrow argument bytes: bind argv and keep its storage alive.
+Returns `options, help_requested, error`. Check error first, then help.
+Use options only when error is empty and help_requested is false; otherwise
+they may be partial. The library does not print or exit.
 
-Long values accept `--name VALUE` or `--name=VALUE`; short values accept
-`-n VALUE` or `-nVALUE`. Booleans accept `--flag=true` or `--flag=false`
-(lowercase only). Bare flags set true and never consume the next argument.
-Short flags do not accept explicit values; bundles remain unchanged.
-Short options run left to right within a bundle:
-flags set true, and a value-taking option consumes the rest of the token,
-or the next argument if no characters remain. Thus `-vc3` means `-v -c 3`.
-An attached '=' is literal: `-n=foo` supplies '=foo'. Repeats use the last
-value. Unknown short options report the offending character.
-`--` ends option processing; a lone `-` is positional. A value token can
-itself be `--help`: help is recognized only where an option is expected.
-`-h`/`--help` bypass missing required fields, but not schema errors or an
-earlier parse error. The library never prints or exits.
+Strings borrow argument bytes. Bind argv to a variable and keep its storage
+alive while using the result. The caller's defaults are unchanged, and each
+field's `provided` reports input from this parse only.
 
-This example uses the `Options` struct in the
-[example preamble](test/doc_preamble.goose): a required input positional
-and a count option with default 1 and short name `c`, plus a verbose flag.
+- Integers, strings, and enums accept `--name VALUE`, `--name=VALUE`,
+  `-n VALUE`, or `-nVALUE`. Repeated options keep the last value.
+- Bare boolean flags set true without consuming a value. Long flags also
+  accept `=true` or `=false`, lowercase only; short flags do not.
+- Short bundles run left to right. A value-taking option consumes the rest
+  of the token, or the next argument: `-vc3` means `-v -c 3`.
+  An attached `=` is literal for short options: `-n=foo` supplies `=foo`.
+- `--` ends option processing. A lone `-` is positional. Named options may
+  appear before, between, or after positionals.
+- `-h`/`--help` bypass missing required fields, but not invalid field settings
+  or earlier parse errors. As a value, `--help` is ordinary input.
+
+Using `Options` from the [example preamble](test/doc_preamble.goose), with
+a required input positional, count defaulting to 1, and a verbose flag:
 
 ```goose
 let argv = ["input.txt", "-vc3"];
@@ -114,33 +112,53 @@ assert(error == "" && !help_requested);
 assert(options.input.value == "input.txt" && options.count.value == 3);
 assert(options.verbose.value);
 assert(options.input.provided && options.count.provided && options.verbose.provided);
-let next_argv = ["another.txt", "--verbose=false"];
-let next, next_help, next_error = goosopt::parse(next_argv, options);
-assert(next_error == "" && !next_help && next.input.provided);
-assert(next.count.value == 3 && !next.count.provided);
-assert(!next.verbose.value && next.verbose.provided);
-let missing_args: (const u8[:])[0] = [];
-let missing, missing_help, missing_error = goosopt::parse<Options>(missing_args);
-assert(!missing_help && missing_error == "missing required argument: input");
+```
+
+Override defaults and distinguish omitted values from explicit input:
+
+```goose
+var defaults = Options {};
+defaults.count.value = 3;
+defaults.verbose.value = true;
+let argv = ["input.txt", "--verbose=false"];
+let options, help_requested, error = goosopt::parse(argv, defaults);
+assert(error == "" && !help_requested);
+assert(options.count.value == 3 && !options.count.provided);
+assert(!options.verbose.value && options.verbose.provided);
+```
+
+Enum options return typed values. `FormatOptions` in the preamble declares
+a `Field<Format>` with `json`, `plain_text`, and `CSV` as its choices:
+
+```goose
+let argv = ["--format=CSV"];
+let options, help_requested, error = goosopt::parse<FormatOptions>(argv);
+assert(error == "" && !help_requested);
+assert(options.format.value == Format.CSV && options.format.provided);
 ```
 
 <a id="api-3"></a>
 
 ## `goosopt::help`
 
-[source](goosopt.goose#L305-L356)
+[source](goosopt.goose#L325-L376)
 
 ```goose
 fn help<T>(program: const u8[:], defaults: T = default<T>(), description: const u8[:] = "") -> u8[>..]
 ```
 
-Generate GNU-style help from the wrappers in the options struct.
-Use `help<Options>(program)` for declared defaults, or pass the same defaults
-as parse. Use defaults, not the parsed result, to display original values.
-Includes Usage, positional arguments, option names, required markers,
-defaults, descriptions, and built-in help flags. Returns text ending in a
-newline; it never prints or exits. Call after parse reports help_requested
-so invalid field configurations have already been rejected.
+Generate GNU-style help for your options struct.
+Use `help<Options>(program)` for declared defaults, or
+`help(program, defaults, description)` for configured defaults and an optional
+description. Pass the original defaults, not the parsed result.
+
+The text includes usage, positional arguments, option names, descriptions,
+required markers, defaults, enum choices, and `-h`/`--help`. Option syntax
+supports zsh's `_gnu_generic` option-name completion.
+
+Call after parse requests help, so field settings have been validated.
+The returned text ends in a newline; write it to stdout without adding
+another one. This function does not print or exit.
 
 Using `Options` from the [example preamble](test/doc_preamble.goose):
 
@@ -151,4 +169,6 @@ assert(error == "" && help_requested);
 let text = goosopt::help<Options>("copy");
 assert(starts_with(text, "Usage: copy [OPTIONS] INPUT\n"));
 assert(find(text, "-c, --count=COUNT  Number of copies [default: 1]") >= 0);
+let enum_text = goosopt::help("convert", FormatOptions {}, "Choose an output format.");
+assert(find(enum_text, "[choices: json, plain_text, CSV] [default: plain_text]") >= 0);
 ```

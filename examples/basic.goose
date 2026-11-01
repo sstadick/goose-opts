@@ -1,3 +1,7 @@
+// Run from the repository root:
+//   goose run examples/basic.goose -- input.txt --name Ada -vc3 --format=CSV
+//   goose run examples/basic.goose -- --help
+// Prints the parsed settings; does not read or convert files.
 import std;
 import os;
 import goosopt from "..";
@@ -23,6 +27,7 @@ struct Options {
 }
 
 fn main() {
+    // Keep argv alive: parsed strings borrow its storage.
     let argv = args();
     let options, help_requested, error = goosopt::parse<Options>(argv[1..]);
     if error.len > 0 {
@@ -30,8 +35,11 @@ fn main() {
         exit(2);
     }
     if help_requested {
-        write_stdout(goosopt::help("basic", Options {}, "A small struct-derived CLI."));
+        write_stdout(goosopt::help("basic", Options {}, "Display parsed settings without reading files."));
         return;
     }
-    print(options.input.value, " ", options.display_name.value, " ", options.count.value, " ", options.verbose.value, " ", options.format.value);
+    print(
+        options.input.value, " ", options.display_name.value, " ",
+        options.count.value, " ", options.verbose.value, " ", options.format.value,
+    );
 }
