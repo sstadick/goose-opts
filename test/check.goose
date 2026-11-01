@@ -24,7 +24,7 @@ fn check_error<T>(argv: (const u8[:])[:], defaults: T, expected: const u8[:]) {
     assert(error == expected && !help_requested);
 }
 
-fn check_presence(argv: (const u8[:])[:], name: bool, count: bool, verbose: bool) {
+fn check_presence(argv: (const u8[:])[:], name: bool, count: bool, verbose: bool, verbose_value: bool = true) {
     var defaults = Options {};
     assert(!defaults.name.provided && !defaults.count.provided && !defaults.verbose.provided);
     defaults.name.value = "";
@@ -39,7 +39,7 @@ fn check_presence(argv: (const u8[:])[:], name: bool, count: bool, verbose: bool
     defaults.verbose.provided = true;
     let options, help_requested, error = goosopt::parse(argv, defaults);
     assert(error == "" && !help_requested);
-    assert(options.name.value == "" && options.count.value == 0 && options.verbose.value);
+    assert(options.name.value == "" && options.count.value == 0 && options.verbose.value == verbose_value);
     assert(options.name.provided == name && options.count.provided == count && options.verbose.provided == verbose);
     assert(defaults.name.provided && defaults.count.provided && defaults.verbose.provided);
 }
@@ -49,6 +49,8 @@ fn main() {
     check_presence(["--count", "0"], false, true, false);
     check_presence(["--name="], true, false, false);
     check_presence(["--verbose"], false, false, true);
+    check_presence(["--verbose=true"], false, false, true);
+    check_presence(["--verbose=false"], false, false, true, false);
     check_presence(["-vvc0", "-n", ""], true, true, true);
     check_presence(["--count=1", "--count=0"], false, true, false);
     check([], "default", 7, false);
@@ -61,7 +63,14 @@ fn main() {
     check(["--name=a=b", "--"], "a=b", 7, false);
     check_error(["--count"], Options {}, "--count: missing value");
     check_error(["--name"], Options {}, "--name: missing value");
-    check_error(["--verbose=false"], Options {}, "--verbose: flag does not take a value");
+    check(["--verbose=true", "--verbose=false"], "default", 7, false);
+    check(["--verbose=false", "--verbose"], "default", 7, true);
+    check_error(["--verbose", "false"], Options {}, "unexpected argument: false");
+    for bad in ["", "True", "FALSE", "0", "1", "yes", "false ", "--help"] {
+        let arg = str("--verbose=", bad);
+        let argv: (const u8[:])[1] = [arg[..]];
+        check_error(argv, Options {}, str("--verbose: expected bool (true or false), got '", bad, "'"));
+    }
     check_error(["--count="], Options {}, "--count: expected i64, got ''");
     for bad in ["", "12x", "1.5", "9223372036854775808", "-9223372036854775809"] {
         check_error(["--count", bad], Options {}, str("--count: expected i64, got '", bad, "'"));
@@ -155,6 +164,16 @@ fn check_metadata() {
     check(["--count", "0"], "default", 0, false, defaults);
     check_error([], Reserved {}, "reserved option name: --help");
 
+    defaults = Options {};
+    defaults.verbose.value = true;
+    defaults.verbose.required = true;
+    defaults.verbose.long = "enabled";
+    check_error([], defaults, "missing required option: --enabled");
+    let bool_argv = ["--enabled=false"];
+    let disabled, disabled_help, disabled_error = goosopt::parse(bool_argv, defaults);
+    assert(disabled_error == "" && !disabled_help && !disabled.verbose.value && disabled.verbose.provided);
+    assert(defaults.verbose.value && !defaults.verbose.provided);
+
     // Positionals count as supplied even when empty or equal to a default.
     let argv = ["", "--name=", "7"];
     let parsed, help_requested, error = goosopt::parse<Command>(argv);
@@ -188,6 +207,8 @@ fn check_names() {
     check(["-o=value"], "=value", 7, false, defaults);
     check(["-vo--help"], "--help", 7, true, defaults);
     check(["-vo", "--"], "--", 7, true, defaults);
+    check(["-vv", "--verbose=false", "-ovalue"], "value", 7, false, defaults);
+    check(["--verbose=false", "-vovalue"], "value", 7, true, defaults);
     check(["-c3", "-c-4", "--count=5", "-ovalue"], "value", 5, false, defaults);
     check_error([], defaults, "missing required option: --output-file");
     check_error(["-vv"], defaults, "missing required option: --output-file");

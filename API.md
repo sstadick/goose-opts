@@ -54,7 +54,7 @@ assert(input.value == "" && input.required && input.positional);
 
 ## `goosopt::parse`
 
-[source](goosopt.goose#L138-L211)
+[source](goosopt.goose#L142-L215)
 
 ```goose
 fn parse<T, S>(argv: S[:], var options: T = default<T>()) -> T, bool, u8[>..]
@@ -73,7 +73,10 @@ The caller's defaults and field configuration are unchanged. String
 values borrow argument bytes: bind argv and keep its storage alive.
 
 Long values accept `--name VALUE` or `--name=VALUE`; short values accept
-`-n VALUE` or `-nVALUE`. Short options run left to right within a bundle:
+`-n VALUE` or `-nVALUE`. Booleans accept `--flag=true` or `--flag=false`
+(lowercase only). Bare flags set true and never consume the next argument.
+Short flags do not accept explicit values; bundles remain unchanged.
+Short options run left to right within a bundle:
 flags set true, and a value-taking option consumes the rest of the token,
 or the next argument if no characters remain. Thus `-vc3` means `-v -c 3`.
 An attached '=' is literal: `-n=foo` supplies '=foo'. Repeats use the last
@@ -94,10 +97,11 @@ assert(error == "" && !help_requested);
 assert(options.input.value == "input.txt" && options.count.value == 3);
 assert(options.verbose.value);
 assert(options.input.provided && options.count.provided && options.verbose.provided);
-let next_argv = ["another.txt"];
+let next_argv = ["another.txt", "--verbose=false"];
 let next, next_help, next_error = goosopt::parse(next_argv, options);
 assert(next_error == "" && !next_help && next.input.provided);
-assert(next.count.value == 3 && !next.count.provided && !next.verbose.provided);
+assert(next.count.value == 3 && !next.count.provided);
+assert(!next.verbose.value && next.verbose.provided);
 let missing_args: (const u8[:])[0] = [];
 let missing, missing_help, missing_error = goosopt::parse<Options>(missing_args);
 assert(!missing_help && missing_error == "missing required argument: input");
@@ -107,7 +111,7 @@ assert(!missing_help && missing_error == "missing required argument: input");
 
 ## `goosopt::help`
 
-[source](goosopt.goose#L266-L315)
+[source](goosopt.goose#L274-L323)
 
 ```goose
 fn help<T>(program: const u8[:], defaults: T = default<T>(), description: const u8[:] = "") -> u8[>..]

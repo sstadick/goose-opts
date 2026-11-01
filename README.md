@@ -87,6 +87,7 @@ Named options may appear before, between, or after positionals.
 | Argument | Effect |
 | --- | --- |
 | `--verbose` or `-v` | Set a boolean flag to true. |
+| `--verbose=true` or `--verbose=false` | Explicitly set a boolean, including turning off a true default. |
 | `--count 3`, `--count=3`, `-c 3`, or `-c3` | Set an integer option. Signed decimal values, including negatives, are accepted. |
 | `-vc3` | Combine `-v` and `-c 3` in a short-option bundle. |
 | `--name Seth` or `--name=Seth` | Set a string option, if your schema declares `name`. |
@@ -103,8 +104,13 @@ remaining characters, or the next argument if none remain: `-vc-3` means
 `-v -c -3`. Attached string values work too: `-nAda` supplies `Ada` when `n`
 is a string option. An attached `=` is literal: `-n=foo` supplies `=foo`.
 
-Boolean values such as `--verbose=false`, lists, subcommands, and custom
-field types are not supported.
+Explicit boolean values require a long option and `=true` or `=false`, in
+lowercase. Other values are errors. Bare flags still consume no value:
+`--verbose false` sets verbose to true and leaves `false` as a positional
+argument. Short flags do not accept explicit values (`-v=false`). Both
+explicit true and false set `.provided` and satisfy a required boolean option.
+
+Lists, subcommands, and custom field types are not supported.
 
 ## Use the result safely
 

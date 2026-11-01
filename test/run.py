@@ -62,6 +62,12 @@ def main():
                 "input.txt Ada -7 true\n", "")
             run([*command, "-vc-3", "input.txt", "-nAda"], "input.txt Ada -3 true\n", "")
             run([*command, "-vn--help", "-c3", "--", "-vc9"], "-vc9 --help 3 true\n", "")
+            run([*command, "input.txt", "-nAda", "--verbose=true", "--verbose=false"],
+                "input.txt Ada 1 false\n", "")
+            run([*command, "--verbose", "false", "-nAda"], "false Ada 1 true\n", "")
+            run([*command, "-nAda", "--", "--verbose=false"], "--verbose=false Ada 1 false\n", "")
+            run([*command, "--verbose=False"], stdout="",
+                stderr="--verbose: expected bool (true or false), got 'False'\n", code=2)
             run([*command, "-vc"], stdout="", stderr="-c: missing value\n", code=2)
             run([*command, "-vzh"], stdout="", stderr="unknown option: -z\n", code=2)
             run([*command, "--name", "--help", "--", "-file"], "-file --help 1 false\n", "")
