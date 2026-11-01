@@ -2,6 +2,8 @@ import std;
 import os;
 import goosopt from "..";
 
+enum Format { json, plain_text, CSV }
+
 struct Options {
     input: goosopt::Field<const u8[:]> = goosopt::Field<const u8[:]> {
         help: "Input file", required: true, positional: true,
@@ -14,6 +16,9 @@ struct Options {
     },
     verbose: goosopt::Field<bool> = goosopt::Field<bool> {
         short: "v", help: "Enable verbose output",
+    },
+    format: goosopt::Field<Format> = goosopt::Field<Format> {
+        short: "f", help: "Output format",
     },
 }
 
@@ -28,5 +33,5 @@ fn main() {
         write_stdout(goosopt::help("basic", Options {}, "A small struct-derived CLI."));
         return;
     }
-    print(options.input.value, " ", options.display_name.value, " ", options.count.value, " ", options.verbose.value);
+    print(options.input.value, " ", options.display_name.value, " ", options.count.value, " ", options.verbose.value, " ", options.format.value);
 }

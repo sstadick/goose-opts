@@ -106,6 +106,7 @@ fn main() {
     check_error(["--name", "x"], Empty {}, "unknown option: --name");
     check_metadata();
     check_names();
+    check_enums();
     print("goosopt checks passed");
 }
 
@@ -272,4 +273,61 @@ fn check_names() {
     defaults.name.long = "v";
     defaults.verbose.short = "v";
     check(["--v", "long", "-V", "short", "-v"], "short", 7, true, defaults);
+}
+
+enum Format { json, plain_text, CSV }
+enum Mode { slow, fast }
+struct EnumOptions {
+    mode: goosopt::Field<Mode> = goosopt::Field<Mode> { positional: true, required: true },
+    output: goosopt::Field<Format> = goosopt::Field<Format> {
+        value: Format.plain_text, long: "format", short: "f", help: "Output format",
+    },
+    verbose: goosopt::Field<bool> = goosopt::Field<bool> { short: "v" },
+}
+
+fn check_enum(argv: (const u8[:])[:], expected: Format, provided: bool = true, verbose: bool = false) {
+    let defaults = EnumOptions {};
+    let options, help_requested, error = goosopt::parse(argv, defaults);
+    assert(error == "" && !help_requested);
+    assert(options.output.value == expected && options.output.provided == provided);
+    assert(options.mode.value == Mode.fast && options.mode.provided);
+    assert(options.verbose.value == verbose);
+    assert(defaults.output.value == Format.plain_text && !defaults.output.provided);
+}
+
+fn check_enums() {
+    check_enum(["fast"], Format.plain_text, false);
+    check_enum(["--format=json", "fast"], Format.json);
+    check_enum(["fast", "--format", "CSV"], Format.CSV);
+    check_enum(["-f", "plain_text", "fast"], Format.plain_text);
+    check_enum(["-fCSV", "fast"], Format.CSV);
+    check_enum(["-vfjson", "--", "fast"], Format.json, true, true);
+    check_enum(["fast", "--format=json", "-fCSV"], Format.CSV);
+    check_error(["fast", "--format"], EnumOptions {}, "--format: missing value");
+    check_error(["fast", "-vf"], EnumOptions {}, "-f: missing value");
+    for bad in ["", "JSON", "csv", "plain-text", "Format.json", "0", "json ", "--help"] {
+        check_error(["fast", "--format", bad], EnumOptions {},
+            str("--format: expected one of [json, plain_text, CSV], got '", bad, "'"));
+    }
+    check_error(["fast", "-fnope"], EnumOptions {}, "-f: expected one of [json, plain_text, CSV], got 'nope'");
+    check_error(["FAST"], EnumOptions {}, "mode: expected one of [slow, fast], got 'FAST'");
+    check_error([], EnumOptions {}, "missing required argument: mode");
+
+    var defaults = EnumOptions {};
+    defaults.output.required = true;
+    defaults.output.provided = true;
+    check_error(["fast"], defaults, "missing required option: --format");
+    let argv = ["fast", "--format=plain_text"];
+    let parsed, help_requested, error = goosopt::parse(argv, defaults);
+    assert(error == "" && !help_requested && parsed.output.value == Format.plain_text && parsed.output.provided);
+    check_error(["fast"], parsed, "missing required option: --format");
+    let help_argv = ["--help"];
+    let unused, requested, help_error = goosopt::parse(help_argv, defaults);
+    assert(requested && help_error == "");
+    let required_help = goosopt::help("enum", defaults);
+    assert(find(required_help, "--format=FORMAT MODE\n") >= 0);
+    assert(find(required_help, "[choices: json, plain_text, CSV] [required]") >= 0);
+    let text = goosopt::help<EnumOptions>("enum");
+    assert(find(text, "-f, --format=FORMAT  Output format [choices: json, plain_text, CSV] [default: plain_text]") >= 0);
+    assert(find(text, "[choices: slow, fast] [required]") >= 0);
 }

@@ -55,22 +55,27 @@ def main():
         for command in ([goose, "run", example, "--"], [binary]):
             run(command, stdout="", stderr="missing required argument: input\n", code=2)
             run([*command, "input.txt"], stdout="", stderr="missing required option: --name\n", code=2)
-            run([*command, "input.txt", "--name", "Ada Lovelace"], "input.txt Ada Lovelace 1 false\n", "")
+            run([*command, "input.txt", "--name", "Ada Lovelace"], "input.txt Ada Lovelace 1 false Format.json\n", "")
             run([*command, "--name=Ada Lovelace", "input.txt", "--count=-3", "--verbose"],
-                "input.txt Ada Lovelace -3 true\n", "")
+                "input.txt Ada Lovelace -3 true Format.json\n", "")
             run([*command, "input.txt", "-n", "Ada", "-c", "-7", "-v"],
-                "input.txt Ada -7 true\n", "")
-            run([*command, "-vc-3", "input.txt", "-nAda"], "input.txt Ada -3 true\n", "")
-            run([*command, "-vn--help", "-c3", "--", "-vc9"], "-vc9 --help 3 true\n", "")
+                "input.txt Ada -7 true Format.json\n", "")
+            run([*command, "-vc-3", "input.txt", "-nAda"], "input.txt Ada -3 true Format.json\n", "")
+            run([*command, "-vn--help", "-c3", "--", "-vc9"], "-vc9 --help 3 true Format.json\n", "")
             run([*command, "input.txt", "-nAda", "--verbose=true", "--verbose=false"],
-                "input.txt Ada 1 false\n", "")
-            run([*command, "--verbose", "false", "-nAda"], "false Ada 1 true\n", "")
-            run([*command, "-nAda", "--", "--verbose=false"], "--verbose=false Ada 1 false\n", "")
+                "input.txt Ada 1 false Format.json\n", "")
+            run([*command, "--verbose", "false", "-nAda"], "false Ada 1 true Format.json\n", "")
+            run([*command, "-nAda", "--", "--verbose=false"], "--verbose=false Ada 1 false Format.json\n", "")
             run([*command, "--verbose=False"], stdout="",
                 stderr="--verbose: expected bool (true or false), got 'False'\n", code=2)
+            run([*command, "input.txt", "-nAda", "--format=plain_text"],
+                "input.txt Ada 1 false Format.plain_text\n", "")
+            run([*command, "input.txt", "-nAda", "-vfCSV"], "input.txt Ada 1 true Format.CSV\n", "")
+            run([*command, "--format=csv"], stdout="",
+                stderr="--format: expected one of [json, plain_text, CSV], got 'csv'\n", code=2)
             run([*command, "-vc"], stdout="", stderr="-c: missing value\n", code=2)
             run([*command, "-vzh"], stdout="", stderr="unknown option: -z\n", code=2)
-            run([*command, "--name", "--help", "--", "-file"], "-file --help 1 false\n", "")
+            run([*command, "--name", "--help", "--", "-file"], "-file --help 1 false Format.json\n", "")
             run([*command, "--count"], stdout="", stderr="--count: missing value\n", code=2)
             run([*command, "-n"], stdout="", stderr="-n: missing value\n", code=2)
             run([*command, "--count", "oops"],
@@ -82,6 +87,7 @@ def main():
             assert help_text.startswith("Usage: basic [OPTIONS] --name=NAME INPUT\n"), help_text
             for text in ("Input file [required]", "-n, --name=NAME  Name to display [required]",
                          "-c, --count=COUNT  Number of copies [default: 1]",
+                         "-f, --format=FORMAT  Output format [choices: json, plain_text, CSV] [default: json]",
                          "-v, --verbose  Enable verbose output [default: false]", "-h, --help"):
                 assert text in help_text, help_text
             assert all(text not in help_text for text in ("--input", "--verbose=", "--display_name")), help_text

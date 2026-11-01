@@ -21,10 +21,12 @@ integer count=0
 for prefix expected in \
     --na --name= \
     --cou --count= \
+    --for --format= \
     --ver '--verbose ' \
     --he '--help ' \
     -n '-n ' \
     -c '-c ' \
+    -f '-f ' \
     -v '-v ' \
     --display --display \
     --inp --inp

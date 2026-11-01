@@ -60,13 +60,14 @@ TinyCC, GCC, and Clang.
 
 ## Describe your options
 
-Each member is a `Field<T>`, where `T` is `bool`, `i64`, or `const u8[:]`.
+Each member is a `Field<T>`, where `T` is `bool`, `i64`, `const u8[:]`, or
+an enum whose variants have no payloads.
 Read the parsed result through `.value`; `.provided` tells you whether the
 user explicitly supplied that field.
 
 | Field setting | Meaning |
 | --- | --- |
-| `value: 1` | Default when the user omits the option. Otherwise defaults to false, zero, or an empty string. |
+| `value: 1` | Default when the user omits the option. Otherwise defaults to false, zero, an empty string, or the first enum variant. |
 | `help: "Number of copies"` | Description in generated help. |
 | `short: "c"` | Add `-c` as an alias. |
 | `long: "dry-run"` | Use `--dry-run` instead of the struct member's name. |
@@ -81,6 +82,29 @@ start with a hyphen. Names must be unique.
 Positionals are assigned in struct declaration order. Required positionals
 must come before optional ones. They cannot be booleans or have option names.
 Named options may appear before, between, or after positionals.
+
+## Use enums for choices
+
+The enum defines the accepted values; there is no separate choices list:
+
+```goose
+enum Format { json, plain_text, CSV }
+struct FormatOptions {
+    format: goosopt::Field<Format> = goosopt::Field<Format> {
+        value: Format.plain_text, short: "f", help: "Output format",
+    },
+}
+```
+
+`--format=json`, `--format CSV`, and `-fplain_text` return a typed `Format`
+in `.value`. Names are case-sensitive: `csv`, `plain-text`, `Format.json`,
+and numeric values are rejected. Enums also work as positionals. Defaults,
+required checks, and `.provided` work as for other fields; without an explicit
+`value`, the default is the enum's first variant.
+
+Help shows `[choices: json, plain_text, CSV] [default: plain_text]`, and
+invalid-value errors list the same choices. Variants with payloads are not
+supported.
 
 ## Accepted arguments
 
@@ -110,7 +134,7 @@ lowercase. Other values are errors. Bare flags still consume no value:
 argument. Short flags do not accept explicit values (`-v=false`). Both
 explicit true and false set `.provided` and satisfy a required boolean option.
 
-Lists, subcommands, and custom field types are not supported.
+Lists, subcommands, and other custom field types are not supported.
 
 ## Use the result safely
 

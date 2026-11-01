@@ -3,8 +3,9 @@ namespace goosopt;
 import std;
 
 // A CLI field's value and metadata, stored directly in the caller's options
-// struct. T must be `bool`, `i64`, or `const u8[:]`. Read parsed data through
-// `.value` and check `.provided` to distinguish explicit input from defaults.
+// struct. T must be `bool`, `i64`, `const u8[:]`, or an enum with no variant
+// payloads. Read parsed data through `.value` and check `.provided` to
+// distinguish explicit input from defaults.
 // `provided` starts false and is reset on each parse, then set true when the
 // field is successfully read, even if its value equals the default. All
 // other members remain unchanged by parsing.
@@ -13,6 +14,10 @@ import std;
 // when true, the user must supply the field even if `value` is initialized.
 // Positionals consume one token in struct declaration order and cannot have
 // long or short names. Required positionals must precede optional ones.
+//
+// Enum choices come from the variant names, matched exactly and case-sensitively.
+// No type prefix, aliases, or numeric values are accepted. Enum defaults use
+// Goose's first variant unless `value` is set. Help and errors list the choices.
 //
 // An empty `long` uses the struct field name; otherwise it replaces that name
 // on the CLI. Names contain ASCII letters, digits, underscores and hyphens,
@@ -26,6 +31,18 @@ import std;
 // assert(!count.provided);
 // let input = goosopt::Field<const u8[:]> { required: true, positional: true };
 // assert(input.value == "" && input.required && input.positional);
+// ```
+//
+// Using `FormatOptions` and `enum Format { json, plain_text, CSV }` from the
+// [example preamble](test/doc_preamble.goose):
+//
+// ```goose
+// let argv = ["--format=CSV"];
+// let options, requested, error = goosopt::parse<FormatOptions>(argv);
+// assert(error == "" && !requested);
+// assert(options.format.value == Format.CSV && options.format.provided);
+// let text = goosopt::help<FormatOptions>("convert");
+// assert(find(text, "[choices: json, plain_text, CSV] [default: plain_text]") >= 0);
 // ```
 struct Field<T> {
     value:      T           = default<T>(),
@@ -167,7 +184,7 @@ fn parse<T, S>(argv: S[:], var options: T = default<T>()) -> T, bool, u8[>..] {
                             let value = arg[cursor..];
                             cursor = arg.len;
                             read_value(&options.Access.value, value)
-                        } else { read_option(&options.Access.value, argv, &i) };
+                        } else { read_option(&options.Access.value, argv, i) };
                         if error.len > 0 { return options, false, str("-", short_name, ": ", error); }
                         options.Access.provided = true;
                     }
@@ -191,7 +208,7 @@ fn parse<T, S>(argv: S[:], var options: T = default<T>()) -> T, bool, u8[>..] {
                 found = true;
                 let error = if attached {
                     read_value(&options.Access.value, arg[long_name.len + 1..])
-                } else { read_option(&options.Access.value, argv, &i) };
+                } else { read_option(&options.Access.value, argv, i) };
                 if error.len > 0 {
                     let label = if field.positional { Name } else if attached { long_name } else { arg };
                     return options, false, str(label, ": ", error);
@@ -214,19 +231,9 @@ fn parse<T, S>(argv: S[:], var options: T = default<T>()) -> T, bool, u8[>..] {
     return options, false, "";
 }
 
-fn read_option<S>(value: bool&, argv: S[:], i: i64&) -> u8[>..] {
-    value = true;
-    return "";
-}
-
-fn read_option<S>(value: i64&, argv: S[:], i: i64&) -> u8[>..] {
-    if i == argv.len { return "missing value"; }
-    let error = read_value(value, argv[i]);
-    i += 1;
-    return error;
-}
-
-fn read_option<S>(value: const u8[:]&, argv: S[:], i: i64&) -> u8[>..] {
+fn read_option<T, S>(value: T&, argv: S[:], i: i64&) -> u8[>..] {
+    let current: T = value;
+    if is_flag(current) { return read_value(value, "true"); }
     if i == argv.len { return "missing value"; }
     let error = read_value(value, argv[i]);
     i += 1;
@@ -251,6 +258,30 @@ fn read_value(value: i64&, text: const u8[:]) -> u8[>..] {
 fn read_value(value: const u8[:]&, text: const u8[:]) -> u8[>..] {
     value = text;
     return "";
+}
+
+fn read_value<T>(value: T&, text: const u8[:]) -> u8[>..] {
+    const for <Name, Variant> in variants<T> {
+        if text == Name { value = Variant; return ""; }
+    }
+    let label, choices = describe_value<T>(value);
+    return str("expected one of [", choices, "], got '", text, "'");
+}
+
+// Display the value and its allowed choices, without enum type prefixes.
+fn describe_value(value: bool) -> u8[>..], u8[>..] { return str(value), ""; }
+fn describe_value(value: i64) -> u8[>..], u8[>..] { return str(value), ""; }
+fn describe_value(value: const u8[:]) -> u8[>..], u8[>..] { return str(value), ""; }
+fn describe_value<T>(value: T) -> u8[>..], u8[>..] {
+    var label:   u8[>..] = [];
+    var choices: u8[>..] = [];
+    const for <Name, Variant> in variants<T> {
+        if choices.len > 0 { format(choices, ", "); }
+        format(choices, Name);
+        let candidate: T = Variant;
+        if value == candidate { format(label, Name); }
+    }
+    return label, choices;
 }
 
 // Generate GNU-style help from the wrappers in the options struct.
@@ -311,8 +342,10 @@ fn help<T>(program: const u8[:], defaults: T = default<T>(), description: const 
         }
         format(row, "  ");
         format_replaced(row, field.help, "\n", "\n    ");
+        let value_label, choices = describe_value(field.value);
+        if choices.len > 0 { format(row, " [choices: ", choices, "]"); }
         if field.required { format(row, " [required]"); }
-        else { format(row, " [default: ", field.value, "]"); }
+        else { format(row, " [default: ", value_label, "]"); }
         format(row, "\n");
         if field.positional { arguments.append(row); }
         else { options.append(row); }

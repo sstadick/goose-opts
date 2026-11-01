@@ -10,3 +10,10 @@ struct Options {
     },
     verbose: goosopt::Field<bool> = goosopt::Field<bool> { short: "v" },
 }
+
+enum Format { json, plain_text, CSV }
+struct FormatOptions {
+    format: goosopt::Field<Format> = goosopt::Field<Format> {
+        value: Format.plain_text, short: "f", help: "Output format",
+    },
+}
