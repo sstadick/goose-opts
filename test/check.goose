@@ -107,6 +107,7 @@ fn main() {
     check_metadata();
     check_names();
     check_enums();
+    check_repeated();
     print("goosopt checks passed");
 }
 
@@ -330,4 +331,88 @@ fn check_enums() {
     let text = goosopt::help<EnumOptions>("enum");
     assert(find(text, "-f, --format=FORMAT  Output format [choices: json, plain_text, CSV] [default: plain_text]") >= 0);
     assert(find(text, "[choices: slow, fast] [required]") >= 0);
+}
+
+struct RepeatedOptions {
+    paths: goosopt::Field<(const u8[:])[]> = goosopt::Field<(const u8[:])[]> {
+        value: ["fallback", "base"], long: "include", short: "I", help: "Search paths",
+    },
+    count:   goosopt::Field<i64>             = goosopt::Field<i64> { value: 1, short: "c" },
+    exclude: goosopt::Field<(const u8[:])[]> = goosopt::Field<(const u8[:])[]> { value: [], short: "X" },
+    input:   goosopt::Field<const u8[:]>     = goosopt::Field<const u8[:]> { positional: true },
+    verbose: goosopt::Field<bool>            = goosopt::Field<bool> { short: "v" },
+}
+
+fn check_repeat(argv: (const u8[:])[:], expected: (const u8[:])[:], provided: bool = true) {
+    var defaults = RepeatedOptions {};
+    defaults.paths.provided = true;
+    let options, requested, error = goosopt::parse(argv, defaults);
+    assert(error == "" && !requested);
+    assert(options.paths.value.len == expected.len && options.paths.provided == provided);
+    for i in expected.len { assert(options.paths.value[i] == expected[i]); }
+    assert(options.exclude.value.len == 0 && !options.exclude.provided);
+    assert(options.paths.long == "include" && options.paths.short == "I" && options.paths.help == "Search paths");
+    assert(defaults.paths.value.len == 2 && defaults.paths.value[0] == "fallback" && defaults.paths.provided);
+}
+
+fn check_repeated() {
+    check_repeat([], ["fallback", "base"], false);
+    check_repeat(["--include", "src", "--include=tests", "-Ivendor"], ["src", "tests", "vendor"]);
+    check_repeat(["--include="], [""]);
+    check_repeat(["-I", "", "-I", "src", "-Isrc"], ["", "src", "src"]);
+    check_repeat(["-vIone", "-I=two", "--include", "--help", "-I", "--"], ["one", "=two", "--help", "--"]);
+    check_repeat(["--include", "a,b", "input.txt"], ["a,b"]);
+    check_repeat(["--", "--include=literal"], ["fallback", "base"], false);
+    check_error(["--include"], RepeatedOptions {}, "--include: missing value");
+    check_error(["-vI"], RepeatedOptions {}, "-I: missing value");
+    check_error(["--include=src", "one", "two"], RepeatedOptions {}, "unexpected argument: two");
+
+    var defaults = RepeatedOptions {};
+    let automatic_argv = ["-Isrc"];
+    let automatic, automatic_help, automatic_error = goosopt::parse<RepeatedOptions>(automatic_argv);
+    assert(automatic_error == "" && !automatic_help && automatic.paths.provided);
+    assert(automatic.paths.value.len == 1 && automatic.paths.value[0] == "src");
+    let omitted_argv: (const u8[:])[0] = [];
+    let omitted, omitted_help, omitted_error = goosopt::parse<RepeatedOptions>(omitted_argv, copy(defaults));
+    assert(omitted_error == "" && !omitted_help && !omitted.paths.provided);
+    defaults.paths.value[0] = "changed";
+    assert(omitted.paths.value.len == 2 && omitted.paths.value[0] == "fallback");
+    defaults.paths.value[0] = "fallback";
+    let argv = ["-Ione", "-Xbuild", "-c2", "--include=two", "--exclude=tmp", "-c9", "input.txt", "-v"];
+    let parsed, requested, error = goosopt::parse(argv, defaults);
+    assert(error == "" && !requested);
+    assert(parsed.paths.value.len == 2 && parsed.paths.value[0] == "one" && parsed.paths.value[1] == "two");
+    assert(parsed.exclude.value.len == 2 && parsed.exclude.value[0] == "build" && parsed.exclude.value[1] == "tmp");
+    assert(parsed.paths.provided && parsed.exclude.provided && parsed.count.value == 9);
+    assert(parsed.input.value == "input.txt" && parsed.verbose.value);
+    let next_argv = ["--include=new"];
+    let next, next_help, next_error = goosopt::parse(next_argv, parsed);
+    assert(next_error == "" && !next_help && next.paths.value.len == 1 && next.paths.value[0] == "new");
+    assert(next.paths.provided && !next.exclude.provided && next.exclude.value == parsed.exclude.value);
+    assert(parsed.paths.value.len == 2 && defaults.paths.value[0] == "fallback");
+
+    defaults.paths.required = true;
+    defaults.paths.provided = true;
+    check_error([], copy(defaults), "missing required option: --include");
+    let empty_argv = ["--include="];
+    let supplied, supplied_help, supplied_error = goosopt::parse(empty_argv, defaults);
+    assert(supplied_error == "" && !supplied_help && supplied.paths.provided);
+    assert(supplied.paths.value.len == 1 && supplied.paths.value[0] == "");
+    check_error([], copy(supplied), "missing required option: --include");
+
+    let text = goosopt::help<RepeatedOptions>("repeat");
+    assert(find(text, "-I, --include=INCLUDE  Search paths [repeatable] [default: [\"fallback\", \"base\"]]") >= 0);
+    assert(find(text, "-X, --exclude=EXCLUDE") >= 0 && find(text, "[repeatable] [default: []]") >= 0);
+    defaults.paths.positional = true;
+    defaults.paths.long = "";
+    defaults.paths.short = "";
+    check_error(["--help"], copy(defaults), "repeated positional is not supported: paths");
+
+    var many: (const u8[:])[>..] = [];
+    for i in 300 { many.push("--include=src"); }
+    many.push("--include=last");
+    let large_defaults = RepeatedOptions {};
+    let large, large_help, large_error = goosopt::parse(many[..], large_defaults);
+    assert(large_error == "" && !large_help && large.paths.value.len == 301);
+    assert(large.paths.value[0] == "src" && large.paths.value[300] == "last");
 }

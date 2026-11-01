@@ -55,15 +55,17 @@ goose build main.goose -O2 -o demo
 The library returns results; your program controls output and exit status.
 Help text includes its final newline, so use `write_stdout` rather than `print`.
 The [complete example](examples/basic.goose) also demonstrates required named
-options and enum choices; it prints settings without reading any files.
+options, enum choices, and repeated string options; it prints settings without
+reading any files.
 
 The import above follows `main`. Pin a commit for a reproducible dependency.
 Tested on Linux x86-64 with TinyCC, GCC, and Clang.
 
 ## Describe your options
 
-Each member is a `Field<T>`, where `T` is `bool`, `i64`, `const u8[:]`, or
-an enum whose variants have no payloads. Read parsed data through `.value`;
+Each member is a `Field<T>`, where `T` is `bool`, `i64`, `const u8[:]`,
+an enum whose variants have no payloads, or `(const u8[:])[]` for repeated
+string options. Read parsed data through `.value`;
 `.provided` tells you whether the user explicitly supplied that field.
 
 | Field setting | Meaning |
@@ -106,6 +108,34 @@ Help shows `[choices: json, plain_text, CSV] [default: plain_text]`, and
 invalid-value errors list the same choices. Variants with payloads are not
 supported.
 
+## Collect repeated string options
+
+Use an owned array of strings for an option that can appear multiple times:
+
+```goose
+struct IncludeOptions {
+    include: goosopt::Field<(const u8[:])[]> = goosopt::Field<(const u8[:])[]> {
+        value: [], short: "I", help: "Search directory",
+    },
+}
+
+let defaults = IncludeOptions {};
+let argv = ["-Isrc", "--include", "tests", "--include=src"];
+let options, help_requested, error = goosopt::parse(argv, defaults);
+// On success, options.include.value contains ["src", "tests", "src"].
+```
+
+Each occurrence consumes one string. Order, duplicates, and empty strings are
+preserved; commas are literal, not separators. Omission keeps the default
+array and sets `.provided` to false. Explicit input replaces the defaults
+and sets `.provided` to true. `required: true` requires at least one occurrence,
+even when defaults exist. Help labels these options `[repeatable]`.
+
+Array fields need an explicit `value: []` or populated default. Both
+`parse<IncludeOptions>(argv)` and `parse(argv, defaults)` work. For matching
+help, use `help<IncludeOptions>(program)` or `help(program, copy(defaults))`.
+Repeated fields are named options only, not positionals.
+
 ## Accepted arguments
 
 | Argument | Effect |
@@ -118,7 +148,8 @@ supported.
 | `-- -filename` | Stop parsing options and treat the remaining tokens as positionals. |
 | `--help` or `-h` | Request help without requiring missing arguments. |
 
-Repeated options keep the last value. Strings may be empty or start with
+Scalar options keep the last value; string-array options collect every value.
+Strings may be empty or start with
 `--`: `--name --help` assigns the literal string `--help` to `name`.
 Use `--` before a negative positional number or a filename starting with `-`.
 A lone `-` is always positional.
@@ -134,7 +165,8 @@ lowercase. Other values are errors. Bare flags consume no value:
 argument. Short flags do not accept explicit values (`-v=false`). Both
 explicit true and false set `.provided` and satisfy a required boolean option.
 
-Lists, subcommands, and other custom field types are not supported.
+Arrays of other element types, subcommands, and other custom field types are
+not supported.
 
 ## Use the result safely
 
@@ -159,6 +191,9 @@ defaults are unchanged.
 Strings **borrow the argument storage**. Keep it alive while using the
 result. Bind argument arrays to a variable rather than passing a temporary
 array literal, and omit the program name when passing process arguments.
+Repeated results own the array of slices, not the referenced string bytes.
+Keep bound array defaults alive too; passing `copy(defaults)` instead lets
+the result follow the lifetimes of those referenced bytes directly.
 
 Use `parse<Options>(argv)` for the defaults declared on your struct. To
 supply different defaults, use `parse(argv, defaults)`. Generate matching

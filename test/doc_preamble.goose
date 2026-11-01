@@ -17,3 +17,9 @@ struct FormatOptions {
         value: Format.plain_text, short: "f", help: "Output format",
     },
 }
+
+struct IncludeOptions {
+    include: goosopt::Field<(const u8[:])[]> = goosopt::Field<(const u8[:])[]> {
+        value: [], short: "I", help: "Search directory",
+    },
+}

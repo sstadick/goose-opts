@@ -10,7 +10,7 @@
 
 ## `goosopt::Field`
 
-[source](goosopt.goose#L46-L54)
+[source](goosopt.goose#L54-L62)
 
 ```goose
 struct Field<T> {
@@ -25,7 +25,8 @@ struct Field<T> {
 ```
 
 Declare an option or positional argument as a member of your options struct.
-T can be `bool`, `i64`, `const u8[:]`, or an enum with no variant payloads.
+T can be `bool`, `i64`, `const u8[:]`, an enum with no variant payloads,
+or `(const u8[:])[]` for repeated string options.
 
 | Member | Meaning |
 | --- | --- |
@@ -50,6 +51,11 @@ precede optional ones. They cannot be booleans or have long or short names.
 Enum values use exact, case-sensitive variant names without a type prefix.
 Help and invalid-value errors list the accepted names.
 
+String arrays collect one value per occurrence, preserving order, duplicates,
+and empty strings. Explicit input replaces defaults; omission retains them.
+Arrays require an explicit `value: []` or populated default and cannot be
+positional. A required array needs at least one occurrence, even if empty.
+
 ```goose
 let count = goosopt::Field<i64> { value: 3, short: "c", help: "Number of copies" };
 assert(count.value == 3 && count.short == "c" && !count.required);
@@ -64,16 +70,18 @@ Using `enum Format { json, plain_text, CSV }` from the
 ```goose
 let output = goosopt::Field<Format> { value: Format.plain_text, short: "f" };
 assert(output.value == Format.plain_text && !output.provided);
+let include = goosopt::Field<(const u8[:])[]> { value: [], short: "I" };
+assert(include.value.len == 0 && !include.provided);
 ```
 
 <a id="api-2"></a>
 
 ## `goosopt::parse`
 
-[source](goosopt.goose#L172-L245)
+[source](goosopt.goose#L200-L203)
 
 ```goose
-fn parse<T, S>(argv: S[:], var options: T = default<T>()) -> T, bool, u8[>..]
+fn parse<T, S>(argv: S[:], defaults: T = T { .. })
 ```
 
 Parse argv into an options struct whose members are `Field<T>` wrappers.
@@ -89,9 +97,13 @@ they may be partial. The library does not print or exit.
 Strings borrow argument bytes. Bind argv to a variable and keep its storage
 alive while using the result. The caller's defaults are unchanged, and each
 field's `provided` reports input from this parse only.
+The result owns its array of string slices, not their referenced bytes.
+When passing bound array defaults, keep those defaults alive too, or pass
+`copy(defaults)` to preserve the lifetimes of their referenced bytes directly.
 
 - Integers, strings, and enums accept `--name VALUE`, `--name=VALUE`,
-  `-n VALUE`, or `-nVALUE`. Repeated options keep the last value.
+  `-n VALUE`, or `-nVALUE`. Scalars keep the last value. String arrays
+  accept the same forms and collect every value, without splitting commas.
 - Bare boolean flags set true without consuming a value. Long flags also
   accept `=true` or `=false`, lowercase only; short flags do not.
 - Short bundles run left to right. A value-taking option consumes the rest
@@ -137,14 +149,26 @@ assert(error == "" && !help_requested);
 assert(options.format.value == Format.CSV && options.format.provided);
 ```
 
+`IncludeOptions` in the preamble declares a repeated string option:
+
+```goose
+let defaults = IncludeOptions {};
+let argv = ["-Isrc", "--include", "tests", "--include=src"];
+let options, help_requested, error = goosopt::parse(argv, defaults);
+assert(error == "" && !help_requested && options.include.provided);
+assert(options.include.value.len == 3);
+assert(options.include.value[0] == "src" && options.include.value[1] == "tests");
+assert(options.include.value[2] == "src" && defaults.include.value.len == 0);
+```
+
 <a id="api-3"></a>
 
 ## `goosopt::help`
 
-[source](goosopt.goose#L325-L376)
+[source](goosopt.goose#L423-L475)
 
 ```goose
-fn help<T>(program: const u8[:], defaults: T = default<T>(), description: const u8[:] = "") -> u8[>..]
+fn help<T>(program: const u8[:], defaults: T = T { .. }, description: const u8[:] = "") -> u8[>..]
 ```
 
 Generate GNU-style help for your options struct.
@@ -153,8 +177,10 @@ Use `help<Options>(program)` for declared defaults, or
 description. Pass the original defaults, not the parsed result.
 
 The text includes usage, positional arguments, option names, descriptions,
-required markers, defaults, enum choices, and `-h`/`--help`. Option syntax
+required/repeatable markers, defaults, enum choices, and `-h`/`--help`. Option syntax
 supports zsh's `_gnu_generic` option-name completion.
+With array fields, use `help<Options>(program)`, `copy(defaults)`, or a fresh
+struct constructor.
 
 Call after parse requests help, so field settings have been validated.
 The returned text ends in a newline; write it to stdout without adding
@@ -171,4 +197,7 @@ assert(starts_with(text, "Usage: copy [OPTIONS] INPUT\n"));
 assert(find(text, "-c, --count=COUNT  Number of copies [default: 1]") >= 0);
 let enum_text = goosopt::help("convert", FormatOptions {}, "Choose an output format.");
 assert(find(enum_text, "[choices: json, plain_text, CSV] [default: plain_text]") >= 0);
+let defaults = IncludeOptions {};
+let repeated_text = goosopt::help("search", copy(defaults));
+assert(find(repeated_text, "-I, --include=INCLUDE  Search directory [repeatable] [default: []]") >= 0);
 ```

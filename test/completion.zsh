@@ -22,11 +22,13 @@ for prefix expected in \
     --na --name= \
     --cou --count= \
     --for --format= \
+    --inc --include= \
     --ver '--verbose ' \
     --he '--help ' \
     -n '-n ' \
     -c '-c ' \
     -f '-f ' \
+    -I '-I ' \
     -v '-v ' \
     --display --display \
     --inp --inp
