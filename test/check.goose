@@ -1,17 +1,17 @@
 import std;
-import goosopt from "..";
+import opts from "..";
 
 struct Options {
-    name:    goosopt::Field<const u8[:]> = goosopt::Field<const u8[:]> { value: "default" },
-    count:   goosopt::Field<i64>         = goosopt::Field<i64> { value: 7 },
-    verbose: goosopt::Field<bool>        = goosopt::Field<bool> {},
+    name:    opts::Field<const u8[:]> = opts::Field<const u8[:]> { value: "default" },
+    count:   opts::Field<i64>         = opts::Field<i64> { value: 7 },
+    verbose: opts::Field<bool>        = opts::Field<bool> {},
 }
-struct Other { dry_run: goosopt::Field<bool>, limit: goosopt::Field<i64>, quiet: goosopt::Field<bool> }
+struct Other { dry_run: opts::Field<bool>, limit: opts::Field<i64>, quiet: opts::Field<bool> }
 struct Empty {}
-struct Reserved { help: goosopt::Field<bool> = goosopt::Field<bool> {} }
+struct Reserved { help: opts::Field<bool> = opts::Field<bool> {} }
 
 fn check(argv: (const u8[:])[:], name: const u8[:], count: i64, verbose: bool, defaults: Options = Options {}) {
-    let options, help_requested, error = goosopt::parse(argv, defaults);
+    let options, help_requested, error = opts::parse(argv, defaults);
     assert(error == "" && !help_requested);
     assert(options.name.value == name && options.count.value == count && options.verbose.value == verbose);
     assert(options.name.help == defaults.name.help && options.name.required == defaults.name.required);
@@ -20,7 +20,7 @@ fn check(argv: (const u8[:])[:], name: const u8[:], count: i64, verbose: bool, d
 }
 
 fn check_error<T>(argv: (const u8[:])[:], defaults: T, expected: const u8[:]) {
-    let options, help_requested, error = goosopt::parse(argv, defaults);
+    let options, help_requested, error = opts::parse(argv, defaults);
     assert(error == expected && !help_requested);
 }
 
@@ -37,7 +37,7 @@ fn check_presence(argv: (const u8[:])[:], name: bool, count: bool, verbose: bool
     defaults.name.provided = true;
     defaults.count.provided = true;
     defaults.verbose.provided = true;
-    let options, help_requested, error = goosopt::parse(argv, defaults);
+    let options, help_requested, error = opts::parse(argv, defaults);
     assert(error == "" && !help_requested);
     assert(options.name.value == "" && options.count.value == 0 && options.verbose.value == verbose_value);
     assert(options.name.provided == name && options.count.provided == count && options.verbose.provided == verbose);
@@ -86,10 +86,10 @@ fn main() {
 
     // A different schema ensures names are reflected, not registered by hand.
     let argv = ["--limit", "11", "--dry_run"];
-    let other, other_help, error = goosopt::parse<Other>(argv);
+    let other, other_help, error = opts::parse<Other>(argv);
     assert(error == "" && !other_help && other.dry_run.value && other.limit.value == 11);
     let no_args: (const u8[:])[0] = [];
-    let zero, zero_help, zero_error = goosopt::parse<Other>(no_args);
+    let zero, zero_help, zero_error = opts::parse<Other>(no_args);
     assert(zero_error == "" && !zero_help && !zero.dry_run.value && zero.limit.value == 0);
     var flags = default<Other>();
     flags.dry_run.short = "d";
@@ -97,30 +97,30 @@ fn main() {
     flags.limit.short = "l";
     for bundle in ["-dq", "-qdl-6"] {
         let args = [bundle];
-        let parsed, help_requested, error = goosopt::parse(args, flags);
+        let parsed, help_requested, error = opts::parse(args, flags);
         assert(error == "" && !help_requested && parsed.dry_run.value && parsed.quiet.value);
         assert(parsed.limit.value == (if bundle == "-dq" { 0 } else { -6 }));
     }
-    let empty, empty_help, empty_error = goosopt::parse<Empty>(no_args);
+    let empty, empty_help, empty_error = opts::parse<Empty>(no_args);
     assert(empty_error == "" && !empty_help);
     check_error(["--name", "x"], Empty {}, "unknown option: --name");
     check_metadata();
     check_names();
     check_enums();
     check_repeated();
-    print("goosopt checks passed");
+    print("goose-opts checks passed");
 }
 
 struct Command {
-    input:   goosopt::Field<const u8[:]> = goosopt::Field<const u8[:]> { required: true, positional: true },
-    name:    goosopt::Field<const u8[:]> = goosopt::Field<const u8[:]> { value: "placeholder", required: true, help: "Display name" },
-    count:   goosopt::Field<i64>         = goosopt::Field<i64> { value: 7, positional: true },
-    verbose: goosopt::Field<bool>        = goosopt::Field<bool> {},
+    input:   opts::Field<const u8[:]> = opts::Field<const u8[:]> { required: true, positional: true },
+    name:    opts::Field<const u8[:]> = opts::Field<const u8[:]> { value: "placeholder", required: true, help: "Display name" },
+    count:   opts::Field<i64>         = opts::Field<i64> { value: 7, positional: true },
+    verbose: opts::Field<bool>        = opts::Field<bool> {},
 }
 
 fn check_command(argv: (const u8[:])[:], input: const u8[:], name: const u8[:], count: i64, verbose: bool) {
     let defaults = Command {};
-    let options, help_requested, error = goosopt::parse(argv, defaults);
+    let options, help_requested, error = opts::parse(argv, defaults);
     assert(error == "" && !help_requested);
     assert(options.input.value == input && options.name.value == name);
     assert(options.count.value == count && options.verbose.value == verbose);
@@ -142,12 +142,12 @@ fn check_metadata() {
     check_error(["--name", "Ada", "source", "-5"], Command {}, "unknown option: -5");
     for flag in ["--help", "-h"] {
         let argv = [flag, "--unknown"];
-        let options, help_requested, error = goosopt::parse<Command>(argv);
+        let options, help_requested, error = opts::parse<Command>(argv);
         assert(help_requested && error == "");
     }
     check_error(["--unknown", "--help"], Command {}, "unknown option: --unknown");
     check_error(["--name", "--help"], Command {}, "missing required argument: input");
-    let text = goosopt::help<Command>("command");
+    let text = opts::help<Command>("command");
     assert(starts_with(text, "Usage: command [OPTIONS] --name=NAME INPUT [COUNT]\n"));
     assert(find(text, "placeholder") == -1 && find(text, "[default: 7]") >= 0);
 
@@ -172,17 +172,17 @@ fn check_metadata() {
     defaults.verbose.long = "enabled";
     check_error([], defaults, "missing required option: --enabled");
     let bool_argv = ["--enabled=false"];
-    let disabled, disabled_help, disabled_error = goosopt::parse(bool_argv, defaults);
+    let disabled, disabled_help, disabled_error = opts::parse(bool_argv, defaults);
     assert(disabled_error == "" && !disabled_help && !disabled.verbose.value && disabled.verbose.provided);
     assert(defaults.verbose.value && !defaults.verbose.provided);
 
     // Positionals count as supplied even when empty or equal to a default.
     let argv = ["", "--name=", "7"];
-    let parsed, help_requested, error = goosopt::parse<Command>(argv);
+    let parsed, help_requested, error = opts::parse<Command>(argv);
     assert(error == "" && !help_requested);
     assert(parsed.input.provided && parsed.name.provided && parsed.count.provided && !parsed.verbose.provided);
     let next_argv = ["source", "--name", "Ada"];
-    let next, next_help, next_error = goosopt::parse(next_argv, parsed);
+    let next, next_help, next_error = opts::parse(next_argv, parsed);
     assert(next_error == "" && !next_help && next.input.provided && next.name.provided);
     assert(next.count.value == 7 && !next.count.provided && !next.verbose.provided);
     assert(parsed.count.provided);
@@ -223,7 +223,7 @@ fn check_names() {
     check_error(["-v=true"], defaults, "unknown option: -=");
     for flag in ["-vh", "-hv", "-vhz"] {
         let argv = [flag];
-        let options, help_requested, error = goosopt::parse(argv, defaults);
+        let options, help_requested, error = opts::parse(argv, defaults);
         assert(error == "" && help_requested);
     }
     check_error(["-o"], defaults, "-o: missing value");
@@ -234,7 +234,7 @@ fn check_names() {
     }
     check_error(["--", "-o"], defaults, "unexpected argument: -o");
     check_error(["--", "-vc3"], defaults, "unexpected argument: -vc3");
-    let text = goosopt::help("named", defaults);
+    let text = opts::help("named", defaults);
     assert(starts_with(text, "Usage: named [OPTIONS] --output-file=OUTPUT-FILE\n"));
     assert(find(text, "-o, --output-file=OUTPUT-FILE  Output path [required]") >= 0 && find(text, "--name") == -1);
 
@@ -279,16 +279,16 @@ fn check_names() {
 enum Format { json, plain_text, CSV }
 enum Mode { slow, fast }
 struct EnumOptions {
-    mode: goosopt::Field<Mode> = goosopt::Field<Mode> { positional: true, required: true },
-    output: goosopt::Field<Format> = goosopt::Field<Format> {
+    mode: opts::Field<Mode> = opts::Field<Mode> { positional: true, required: true },
+    output: opts::Field<Format> = opts::Field<Format> {
         value: Format.plain_text, long: "format", short: "f", help: "Output format",
     },
-    verbose: goosopt::Field<bool> = goosopt::Field<bool> { short: "v" },
+    verbose: opts::Field<bool> = opts::Field<bool> { short: "v" },
 }
 
 fn check_enum(argv: (const u8[:])[:], expected: Format, provided: bool = true, verbose: bool = false) {
     let defaults = EnumOptions {};
-    let options, help_requested, error = goosopt::parse(argv, defaults);
+    let options, help_requested, error = opts::parse(argv, defaults);
     assert(error == "" && !help_requested);
     assert(options.output.value == expected && options.output.provided == provided);
     assert(options.mode.value == Mode.fast && options.mode.provided);
@@ -319,34 +319,34 @@ fn check_enums() {
     defaults.output.provided = true;
     check_error(["fast"], defaults, "missing required option: --format");
     let argv = ["fast", "--format=plain_text"];
-    let parsed, help_requested, error = goosopt::parse(argv, defaults);
+    let parsed, help_requested, error = opts::parse(argv, defaults);
     assert(error == "" && !help_requested && parsed.output.value == Format.plain_text && parsed.output.provided);
     check_error(["fast"], parsed, "missing required option: --format");
     let help_argv = ["--help"];
-    let unused, requested, help_error = goosopt::parse(help_argv, defaults);
+    let unused, requested, help_error = opts::parse(help_argv, defaults);
     assert(requested && help_error == "");
-    let required_help = goosopt::help("enum", defaults);
+    let required_help = opts::help("enum", defaults);
     assert(find(required_help, "--format=FORMAT MODE\n") >= 0);
     assert(find(required_help, "[choices: json, plain_text, CSV] [required]") >= 0);
-    let text = goosopt::help<EnumOptions>("enum");
+    let text = opts::help<EnumOptions>("enum");
     assert(find(text, "-f, --format=FORMAT  Output format [choices: json, plain_text, CSV] [default: plain_text]") >= 0);
     assert(find(text, "[choices: slow, fast] [required]") >= 0);
 }
 
 struct RepeatedOptions {
-    paths: goosopt::Field<(const u8[:])[]> = goosopt::Field<(const u8[:])[]> {
+    paths: opts::Field<(const u8[:])[]> = opts::Field<(const u8[:])[]> {
         value: ["fallback", "base"], long: "include", short: "I", help: "Search paths",
     },
-    count:   goosopt::Field<i64>             = goosopt::Field<i64> { value: 1, short: "c" },
-    exclude: goosopt::Field<(const u8[:])[]> = goosopt::Field<(const u8[:])[]> { value: [], short: "X" },
-    input:   goosopt::Field<const u8[:]>     = goosopt::Field<const u8[:]> { positional: true },
-    verbose: goosopt::Field<bool>            = goosopt::Field<bool> { short: "v" },
+    count:   opts::Field<i64>             = opts::Field<i64> { value: 1, short: "c" },
+    exclude: opts::Field<(const u8[:])[]> = opts::Field<(const u8[:])[]> { value: [], short: "X" },
+    input:   opts::Field<const u8[:]>     = opts::Field<const u8[:]> { positional: true },
+    verbose: opts::Field<bool>            = opts::Field<bool> { short: "v" },
 }
 
 fn check_repeat(argv: (const u8[:])[:], expected: (const u8[:])[:], provided: bool = true) {
     var defaults = RepeatedOptions {};
     defaults.paths.provided = true;
-    let options, requested, error = goosopt::parse(argv, defaults);
+    let options, requested, error = opts::parse(argv, defaults);
     assert(error == "" && !requested);
     assert(options.paths.value.len == expected.len && options.paths.provided == provided);
     for i in expected.len { assert(options.paths.value[i] == expected[i]); }
@@ -369,24 +369,24 @@ fn check_repeated() {
 
     var defaults = RepeatedOptions {};
     let automatic_argv = ["-Isrc"];
-    let automatic, automatic_help, automatic_error = goosopt::parse<RepeatedOptions>(automatic_argv);
+    let automatic, automatic_help, automatic_error = opts::parse<RepeatedOptions>(automatic_argv);
     assert(automatic_error == "" && !automatic_help && automatic.paths.provided);
     assert(automatic.paths.value.len == 1 && automatic.paths.value[0] == "src");
     let omitted_argv: (const u8[:])[0] = [];
-    let omitted, omitted_help, omitted_error = goosopt::parse<RepeatedOptions>(omitted_argv, copy(defaults));
+    let omitted, omitted_help, omitted_error = opts::parse<RepeatedOptions>(omitted_argv, copy(defaults));
     assert(omitted_error == "" && !omitted_help && !omitted.paths.provided);
     defaults.paths.value[0] = "changed";
     assert(omitted.paths.value.len == 2 && omitted.paths.value[0] == "fallback");
     defaults.paths.value[0] = "fallback";
     let argv = ["-Ione", "-Xbuild", "-c2", "--include=two", "--exclude=tmp", "-c9", "input.txt", "-v"];
-    let parsed, requested, error = goosopt::parse(argv, defaults);
+    let parsed, requested, error = opts::parse(argv, defaults);
     assert(error == "" && !requested);
     assert(parsed.paths.value.len == 2 && parsed.paths.value[0] == "one" && parsed.paths.value[1] == "two");
     assert(parsed.exclude.value.len == 2 && parsed.exclude.value[0] == "build" && parsed.exclude.value[1] == "tmp");
     assert(parsed.paths.provided && parsed.exclude.provided && parsed.count.value == 9);
     assert(parsed.input.value == "input.txt" && parsed.verbose.value);
     let next_argv = ["--include=new"];
-    let next, next_help, next_error = goosopt::parse(next_argv, parsed);
+    let next, next_help, next_error = opts::parse(next_argv, parsed);
     assert(next_error == "" && !next_help && next.paths.value.len == 1 && next.paths.value[0] == "new");
     assert(next.paths.provided && !next.exclude.provided && next.exclude.value == parsed.exclude.value);
     assert(parsed.paths.value.len == 2 && defaults.paths.value[0] == "fallback");
@@ -395,12 +395,12 @@ fn check_repeated() {
     defaults.paths.provided = true;
     check_error([], copy(defaults), "missing required option: --include");
     let empty_argv = ["--include="];
-    let supplied, supplied_help, supplied_error = goosopt::parse(empty_argv, defaults);
+    let supplied, supplied_help, supplied_error = opts::parse(empty_argv, defaults);
     assert(supplied_error == "" && !supplied_help && supplied.paths.provided);
     assert(supplied.paths.value.len == 1 && supplied.paths.value[0] == "");
     check_error([], copy(supplied), "missing required option: --include");
 
-    let text = goosopt::help<RepeatedOptions>("repeat");
+    let text = opts::help<RepeatedOptions>("repeat");
     assert(find(text, "-I, --include=INCLUDE  Search paths [repeatable] [default: [\"fallback\", \"base\"]]") >= 0);
     assert(find(text, "-X, --exclude=EXCLUDE") >= 0 && find(text, "[repeatable] [default: []]") >= 0);
     defaults.paths.positional = true;
@@ -412,7 +412,7 @@ fn check_repeated() {
     for i in 300 { many.push("--include=src"); }
     many.push("--include=last");
     let large_defaults = RepeatedOptions {};
-    let large, large_help, large_error = goosopt::parse(many[..], large_defaults);
+    let large, large_help, large_error = opts::parse(many[..], large_defaults);
     assert(large_error == "" && !large_help && large.paths.value.len == 301);
     assert(large.paths.value[0] == "src" && large.paths.value[300] == "last");
 }

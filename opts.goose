@@ -1,5 +1,5 @@
 // Typed command-line options, positional arguments, and help text.
-namespace goosopt;
+namespace opts;
 import std;
 
 // Declare an option or positional argument as a member of your options struct.
@@ -35,10 +35,10 @@ import std;
 // positional. A required array needs at least one occurrence, even if empty.
 //
 // ```goose
-// let count = goosopt::Field<i64> { value: 3, short: "c", help: "Number of copies" };
+// let count = opts::Field<i64> { value: 3, short: "c", help: "Number of copies" };
 // assert(count.value == 3 && count.short == "c" && !count.required);
 // assert(!count.provided);
-// let input = goosopt::Field<const u8[:]> { required: true, positional: true };
+// let input = opts::Field<const u8[:]> { required: true, positional: true };
 // assert(input.value == "" && input.required && input.positional);
 // ```
 //
@@ -46,9 +46,9 @@ import std;
 // [example preamble](test/doc_preamble.goose):
 //
 // ```goose
-// let output = goosopt::Field<Format> { value: Format.plain_text, short: "f" };
+// let output = opts::Field<Format> { value: Format.plain_text, short: "f" };
 // assert(output.value == Format.plain_text && !output.provided);
-// let include = goosopt::Field<(const u8[:])[]> { value: [], short: "I" };
+// let include = opts::Field<(const u8[:])[]> { value: [], short: "I" };
 // assert(include.value.len == 0 && !include.provided);
 // ```
 struct Field<T> {
@@ -156,7 +156,7 @@ fn validate<T>(options: T&) -> u8[>..] {
 //
 // ```goose
 // let argv = ["input.txt", "-vc3"];
-// let options, help_requested, error = goosopt::parse<Options>(argv);
+// let options, help_requested, error = opts::parse<Options>(argv);
 // assert(error == "" && !help_requested);
 // assert(options.input.value == "input.txt" && options.count.value == 3);
 // assert(options.verbose.value);
@@ -170,7 +170,7 @@ fn validate<T>(options: T&) -> u8[>..] {
 // defaults.count.value = 3;
 // defaults.verbose.value = true;
 // let argv = ["input.txt", "--verbose=false"];
-// let options, help_requested, error = goosopt::parse(argv, defaults);
+// let options, help_requested, error = opts::parse(argv, defaults);
 // assert(error == "" && !help_requested);
 // assert(options.count.value == 3 && !options.count.provided);
 // assert(!options.verbose.value && options.verbose.provided);
@@ -181,7 +181,7 @@ fn validate<T>(options: T&) -> u8[>..] {
 //
 // ```goose
 // let argv = ["--format=CSV"];
-// let options, help_requested, error = goosopt::parse<FormatOptions>(argv);
+// let options, help_requested, error = opts::parse<FormatOptions>(argv);
 // assert(error == "" && !help_requested);
 // assert(options.format.value == Format.CSV && options.format.provided);
 // ```
@@ -191,7 +191,7 @@ fn validate<T>(options: T&) -> u8[>..] {
 // ```goose
 // let defaults = IncludeOptions {};
 // let argv = ["-Isrc", "--include", "tests", "--include=src"];
-// let options, help_requested, error = goosopt::parse(argv, defaults);
+// let options, help_requested, error = opts::parse(argv, defaults);
 // assert(error == "" && !help_requested && options.include.provided);
 // assert(options.include.value.len == 3);
 // assert(options.include.value[0] == "src" && options.include.value[1] == "tests");
@@ -409,15 +409,15 @@ fn describe_value<T>(value: T) -> u8[>..], u8[>..] {
 //
 // ```goose
 // let argv = ["--help"];
-// let options, help_requested, error = goosopt::parse<Options>(argv);
+// let options, help_requested, error = opts::parse<Options>(argv);
 // assert(error == "" && help_requested);
-// let text = goosopt::help<Options>("copy");
+// let text = opts::help<Options>("copy");
 // assert(starts_with(text, "Usage: copy [OPTIONS] INPUT\n"));
 // assert(find(text, "-c, --count=COUNT  Number of copies [default: 1]") >= 0);
-// let enum_text = goosopt::help("convert", FormatOptions {}, "Choose an output format.");
+// let enum_text = opts::help("convert", FormatOptions {}, "Choose an output format.");
 // assert(find(enum_text, "[choices: json, plain_text, CSV] [default: plain_text]") >= 0);
 // let defaults = IncludeOptions {};
-// let repeated_text = goosopt::help("search", copy(defaults));
+// let repeated_text = opts::help("search", copy(defaults));
 // assert(find(repeated_text, "-I, --include=INCLUDE  Search directory [repeatable] [default: []]") >= 0);
 // ```
 fn help<T>(program: const u8[:], defaults: T = T { .. }, description: const u8[:] = "") -> u8[>..] {

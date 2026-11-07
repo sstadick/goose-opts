@@ -1,7 +1,7 @@
-# goosopt
+# goose-opts
 
 Define command-line options as a struct in [Goose](https://github.com/aardappel/goose).
-goosopt parses flags, values, and positional arguments, and generates help
+goose-opts parses flags, values, and positional arguments, and generates help
 from the descriptions you put on each field.
 
 **[API reference and examples](API.md)** · [Complete example](examples/basic.goose)
@@ -15,29 +15,29 @@ Save this as `main.goose`. Goose downloads the package automatically:
 ```goose
 import std;
 import os;
-import goosopt from "github.com/sstadick/goosopt@main";
+import opts from "github.com/sstadick/goose-opts@main";
 
 struct Options {
-    input: goosopt::Field<const u8[:]> = goosopt::Field<const u8[:]> {
+    input: opts::Field<const u8[:]> = opts::Field<const u8[:]> {
         required: true, positional: true, help: "Input file",
     },
-    count: goosopt::Field<i64> = goosopt::Field<i64> {
+    count: opts::Field<i64> = opts::Field<i64> {
         value: 1, short: "c", help: "Number of copies",
     },
-    verbose: goosopt::Field<bool> = goosopt::Field<bool> {
+    verbose: opts::Field<bool> = opts::Field<bool> {
         short: "v", help: "Enable verbose output",
     },
 }
 
 fn main() {
     let argv = args();
-    let options, help_requested, error = goosopt::parse<Options>(argv[1..]);
+    let options, help_requested, error = opts::parse<Options>(argv[1..]);
     if error.len > 0 {
         write_stderr(str(error, "\n"));
         exit(2);
     }
     if help_requested {
-        write_stdout(goosopt::help<Options>("demo"));
+        write_stdout(opts::help<Options>("demo"));
         return;
     }
     print(options.input.value, " ", options.count.value, " ", options.verbose.value);
@@ -93,7 +93,7 @@ The enum's variant names are the accepted CLI values:
 ```goose
 enum Format { json, plain_text, CSV }
 struct FormatOptions {
-    format: goosopt::Field<Format> = goosopt::Field<Format> {
+    format: opts::Field<Format> = opts::Field<Format> {
         value: Format.plain_text, short: "f", help: "Output format",
     },
 }
@@ -114,14 +114,14 @@ Use an owned array of strings for an option that can appear multiple times:
 
 ```goose
 struct IncludeOptions {
-    include: goosopt::Field<(const u8[:])[]> = goosopt::Field<(const u8[:])[]> {
+    include: opts::Field<(const u8[:])[]> = opts::Field<(const u8[:])[]> {
         value: [], short: "I", help: "Search directory",
     },
 }
 
 let defaults = IncludeOptions {};
 let argv = ["-Isrc", "--include", "tests", "--include=src"];
-let options, help_requested, error = goosopt::parse(argv, defaults);
+let options, help_requested, error = opts::parse(argv, defaults);
 // On success, options.include.value contains ["src", "tests", "src"].
 ```
 
@@ -226,8 +226,8 @@ python3 test/run.py --goose /path/to/goose --cc clang --zsh zsh
 The second command also requires zsh and tests interactive completion.
 
 Edit API documentation in source comments, not `API.md`. With
-[goosdoc v0.2.0](https://github.com/sstadick/goosdoc/releases/tag/v0.2.0)
-checked out at `../goosdoc`, run:
+[goose-doc](https://github.com/sstadick/goose-doc/commit/f7292c9ee395596fa39eb709f90dc71ef124a0eb)
+checked out at `../goose-doc`, run:
 
 ```sh
 scripts/docs.sh
@@ -237,11 +237,30 @@ scripts/doctest.sh --cc gcc
 scripts/doctest.sh --cc clang
 ```
 
-Set `GOOSDOC=/path/to/goosdoc/main.goose` for another location. Every API
+Set `GOOSE_DOC=/path/to/goose-doc/main.goose` for another location. Every API
 declaration needs an executable example; imports and shared types belong in
 [test/doc_preamble.goose](test/doc_preamble.goose). See the
-[example conventions](https://github.com/sstadick/goosdoc#executable-examples).
+[example conventions](https://github.com/sstadick/goose-doc#executable-examples).
 CI checks documentation and tests before publishing version-tagged releases.
+
+## Migration from goosopt
+
+The repository is now [sstadick/goose-opts](https://github.com/sstadick/goose-opts).
+Replace `import goosopt from "github.com/sstadick/goosopt@<ref>";` with
+`import opts from "github.com/sstadick/goose-opts@<migration-or-later-ref>";`
+and change `goosopt::` to `opts::`. The entry file is `opts.goose`.
+Function and type names are unchanged; owned-struct UFCS remains supported.
+Old release tags retain the old entry file and namespace, so do not use the
+new import identifier with a pre-migration revision. No compatibility wrapper
+is provided.
+
+Dependencies below are exact coordinated migration commits. Until they are
+merged/published, remote builds require those commits to be made available
+(or local package source overrides). Existing release tags do not contain
+the new namespaces. The documentation scripts use `GOOSE_DOC`, defaulting
+to `../goose-doc/main.goose`.
+
+- `goose-doc`: `f7292c9ee395596fa39eb709f90dc71ef124a0eb`
 
 ## License
 

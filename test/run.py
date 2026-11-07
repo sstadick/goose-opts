@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Check goosopt with TinyCC and a native C compiler, using a fresh Goose cache."""
+"""Check goose-opts with TinyCC and a native C compiler, using a fresh Goose cache."""
 import argparse
 import os
 from pathlib import Path
@@ -25,7 +25,7 @@ def main():
     if zsh:
         zsh = str(Path(zsh).resolve())
     root = Path(__file__).resolve().parent.parent
-    with tempfile.TemporaryDirectory(prefix="goosopt-") as tmp:
+    with tempfile.TemporaryDirectory(prefix="goose-opts-") as tmp:
         out = Path(tmp)
         env = dict(os.environ, GOOSE_HOME=str(out / "home"))
 
@@ -41,12 +41,12 @@ def main():
 
         checks = root / "test" / "check.goose"
         for level in (0, 2):
-            run([goose, "run", "--debug", f"-O{level}", checks], "goosopt checks passed\n")
+            run([goose, "run", "--debug", f"-O{level}", checks], "goose-opts checks passed\n")
             print(f"PASS TinyCC -O{level}", flush=True)
         suffix = ".exe" if os.name == "nt" else ""
         native = out / ("check" + suffix)
         run([goose, "build", "--debug", "--cc", cc, "-o", native, checks])
-        run([native], "goosopt checks passed\n", "")
+        run([native], "goose-opts checks passed\n", "")
         print("PASS native parser checks", flush=True)
 
         example = root / "examples" / "basic.goose"
