@@ -219,8 +219,8 @@ are accepted.
 ### Compiler support
 
 CI pins Goose to
-[`f4637bfb342fb70d42bea0474eab9e62a3c99d68`](https://github.com/aardappel/goose/commit/f4637bfb342fb70d42bea0474eab9e62a3c99d68)
-(`goose v2026.4-17-gf4637bfb`, runtime `d521138194f1`). This revision is
+[`d5ae5bbda990923fa4129f969c7f853c20d4d1e6`](https://github.com/aardappel/goose/commit/d5ae5bbda990923fa4129f969c7f853c20d4d1e6)
+(`goose v2026.4-20-gd5ae5bbd`, runtime `d521138194f1`). This revision is
 verified on Linux x86-64 with TinyCC at `-O0`/`-O2`, GCC, and Clang,
 including API documentation examples and zsh completion. The previous baseline
 `b46099024b9af8a9f54cd76e24953a89c21ccb3a` also passes these checks.
