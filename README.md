@@ -216,6 +216,26 @@ are accepted.
 
 ## Contributing
 
+### Compiler support
+
+CI pins Goose to
+[`d5ae5bbda990923fa4129f969c7f853c20d4d1e6`](https://github.com/aardappel/goose/commit/d5ae5bbda990923fa4129f969c7f853c20d4d1e6)
+(`goose v2026.4-20-gd5ae5bbd`, runtime `d521138194f1`). This revision is
+verified on Linux x86-64 with TinyCC at `-O0`/`-O2`, GCC, and Clang,
+including API documentation examples and zsh completion. The previous baseline
+`b46099024b9af8a9f54cd76e24953a89c21ccb3a` also passes these checks.
+
+To reproduce the CI compiler, check out the pinned Goose revision and build it
+with the same configuration (replace `/path/to/goose` with that checkout):
+
+```sh
+cmake -S /path/to/goose -B /path/to/goose/build -DCMAKE_BUILD_TYPE=Debug -DGOOSE_BUILTIN_LIBS=
+cmake --build /path/to/goose/build --parallel 2
+export PATH="/path/to/goose/build:$PATH"
+```
+
+### Checks
+
 Run tests with Python 3, Goose, and a native C compiler:
 
 ```sh
