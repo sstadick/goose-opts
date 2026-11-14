@@ -219,11 +219,23 @@ are accepted.
 ### Compiler support
 
 CI pins Goose to
-[`855f1037a5ceee837ef270382ac8d26df47a7139`](https://github.com/aardappel/goose/commit/855f1037a5ceee837ef270382ac8d26df47a7139)
-(`goose v2026.4-24-g855f1037`, runtime `d521138194f1`). This revision is
+[`4602c98660676b2cb94bc9b06fec8c65b37fce92`](https://github.com/aardappel/goose/commit/4602c98660676b2cb94bc9b06fec8c65b37fce92)
+(`goose v2026.4-26-g4602c986`, runtime `d521138194f1`). This revision is
 verified on Linux x86-64 with TinyCC at `-O0`/`-O2`, GCC, and Clang,
 including API documentation examples and zsh completion. The previous baseline
-`b46099024b9af8a9f54cd76e24953a89c21ccb3a` also passes these checks.
+`b46099024b9af8a9f54cd76e24953a89c21ccb3a` passed the parser, documentation,
+and completion checks before the checkfree-specific tests were added.
+
+This compiler includes the caller-based `checkfree` verification change
+[`16437205`](https://github.com/aardappel/goose/commit/16437205c3191b06e51267c3ffbf20864e6d62d2).
+Callees need not be annotated, but every bounds check executed by a `checkfree`
+caller must be proven away. A fixed scalar-help fixture passes from a
+`checkfree` caller at `-O2`, but retains checks in `format_replaced` at `-O0`.
+Help is not generally promised check-free; acceptance depends on the schema
+and inlining. Parsing arbitrary argv also retains bounds checks: call `parse`
+from an ordinary function. Tests verify the accepted help case, retained-check
+call-chain diagnostics for help and parsing, and the warning that `--no-bce`
+disables verification. No parser checks or annotations were removed.
 
 To reproduce the CI compiler, check out the pinned Goose revision and build it
 with the same configuration (replace `/path/to/goose` with that checkout):

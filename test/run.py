@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """Check goose-opts with TinyCC and a native C compiler, using a fresh Goose cache."""
 import argparse
+import json
 import os
 from pathlib import Path
 import shutil
@@ -48,6 +49,38 @@ def main():
         run([goose, "build", "--debug", "--cc", cc, "-o", native, checks])
         run([native], "goose-opts checks passed\n", "")
         print("PASS native parser checks", flush=True)
+
+        checkfree = root / "test" / "checkfree.goose"
+        run([goose, "run", "--debug", "-O2", checkfree],
+            "goose-opts checkfree help passed\n", "")
+        run([goose, "build", "--debug", "-O2", "--cc", cc, "-o", native, checkfree])
+        run([native], "goose-opts checkfree help passed\n", "")
+        diagnostic = run([goose, "check", "-O0", "--diagnostics", "json", checkfree], code=1)
+        errors = json.loads(diagnostic.stdout)
+        assert errors and all(
+            d["severity"] == "error"
+            and "checkfree fn render_help calls opts::help" in d["message"]
+            and "format_replaced" in d["message"]
+            and "keeps a bounds check" in d["message"]
+            for d in errors
+        ), diagnostic.stdout
+        print("PASS checkfree help (-O2 TinyCC/native; -O0 retained-check diagnostics)", flush=True)
+
+        rejected = root / "test" / "checkfree_parse.goose"
+        diagnostic = run([goose, "check", "--diagnostics", "json", rejected], code=1)
+        errors = json.loads(diagnostic.stdout)
+        assert errors and all(
+            d["severity"] == "error"
+            and "checkfree fn parse_args calls opts::parse" in d["message"]
+            and "keeps a bounds check" in d["message"]
+            and Path(d["file"]).name == "opts.goose"
+            for d in errors
+        ), diagnostic.stdout
+        unchecked = run([goose, "check", "--no-bce", "--diagnostics", "json", rejected])
+        warnings = json.loads(unchecked.stdout)
+        assert any(d["severity"] == "warning" and "checkfree" in d["message"]
+                   and "--no-bce" in d["message"] for d in warnings), unchecked.stdout
+        print("PASS checkfree parser rejection and --no-bce warning", flush=True)
 
         example = root / "examples" / "basic.goose"
         binary = out / ("basic" + suffix)
